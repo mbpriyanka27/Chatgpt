@@ -1,0 +1,187 @@
+/* Hide default Streamlit headers, footers & Deploy button */
+#MainMenu { visibility: hidden; }
+footer { visibility: hidden; }
+header { visibility: hidden; }
+.stDeployButton { display: none; }
+
+/* Font and base reset */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* App Header */
+.pro-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 0rem 1rem 0rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 1.2rem;
+}
+
+.brand-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.brand-title {
+    font-size: 1.65rem;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin: 0;
+}
+
+.brand-badge {
+    font-size: 0.72rem;
+    font-weight: 700;
+    background: rgba(56, 189, 248, 0.15);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.35);
+    padding: 2px 7px;
+    border-radius: 9999px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+/* Welcome Screen */
+.welcome-container {
+    text-align: center;
+    padding: 40px 10px 20px 10px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.welcome-title {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 10px;
+}
+
+.welcome-subtitle {
+    font-size: 1.05rem;
+    color: #94a3b8;
+    margin-bottom: 30px;
+}
+
+.prompt-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 14px;
+    margin-top: 20px;
+}
+
+.prompt-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    padding: 16px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.prompt-card:hover {
+    border-color: #38bdf8;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(56, 189, 248, 0.15);
+}
+
+.prompt-card-title {
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: #f1f5f9;
+    margin-bottom: 4px;
+}
+
+.prompt-card-desc {
+    font-size: 0.8rem;
+    color: #94a3b8;
+}
+
+/* Chat Message Styling */
+.user-bubble {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px 16px 4px 16px;
+    padding: 14px 18px;
+    color: #f8fafc;
+}
+
+.assistant-bubble {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 16px 16px 16px 4px;
+    padding: 14px 18px;
+    color: #f1f5f9;
+}
+
+/* Source Badges */
+.source-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(56, 189, 248, 0.1);
+    color: #38bdf8;
+    border: 1px solid rgba(56, 189, 248, 0.25);
+    border-radius: 8px;
+    padding: 4px 10px;
+    font-size: 0.78rem;
+    font-weight: 500;
+    margin-right: 6px;
+    margin-top: 6px;
+}
+
+/* User Card in Sidebar */
+.user-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px;
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    margin-top: 15px;
+}
+
+.user-avatar {
+    width: 38px;
+    height: 38px;
+    border-radius: 50%;
+    background: #0284c7;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 15px;
+}
+
+.user-info {
+    flex: 1;
+    overflow: hidden;
+}
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #f8fafc;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.user-email {
+    font-size: 0.75rem;
+    color: #94a3b8;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+

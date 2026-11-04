@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.env
+serviceAccountKey.json
+*.db
+data/users/*/documents/*
+data/users/*/faiss_index/*
+data/users/*/exports/*
+
+# Next.js / Frontend
+frontend/.next/
+frontend/node_modules/
+node_modules/

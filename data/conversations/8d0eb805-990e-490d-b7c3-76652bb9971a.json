@@ -1,0 +1,36 @@
+{
+  "id": "8d0eb805-990e-490d-b7c3-76652bb9971a",
+  "title": "Hi",
+  "messages": [
+    {
+      "id": "9179c90c-8dd9-451f-b615-c179a5c4444f",
+      "role": "user",
+      "content": "Hi",
+      "metadata": {}
+    },
+    {
+      "id": "5ee0730d-d69f-47d0-97bc-436c0db6e3ca",
+      "role": "assistant",
+      "content": "Hello! How can I help you today? Do you have any specific questions or topics you'd like to discuss? I'm here to explain things in clear, easy-to-understand ways.",
+      "metadata": {
+        "sources": []
+      }
+    },
+    {
+      "id": "97f34761-a043-465b-8885-65216243bdb1",
+      "role": "user",
+      "content": "What is LLM?",
+      "metadata": {}
+    },
+    {
+      "id": "9c33b0f5-708f-4125-b163-43b48827e76f",
+      "role": "assistant",
+      "content": "LLM stands for Large Language Model. It's an advanced type of artificial intelligence that has been trained on vast amounts of text data. These models are designed to understand and generate human-like language, making them useful for tasks such as translation, summarization, dialogue systems, question answering, and more.\n\n",
+      "metadata": {
+        "sources": []
+      }
+    }
+  ],
+  "created_at": "2026-11-01T06:42:33.896939",
+  "updated_at": "2026-11-01T06:45:09.432303"
+}

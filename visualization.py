@@ -1,151 +1,155 @@
-import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
-from sklearn.decomposition import PCA
 import numpy as np
+import torch
+from typing import List, Optional, Dict, Any
 
-def visualize_tokenization(tokens, input_ids):
-    """Visualizes tokenization process."""
-    st.markdown("### Tokenization")
-    st.write("How the input text is split into tokens and mapped to IDs.")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown("**Tokens**")
-        st.code(" | ".join(tokens))
-    with col2:
-        st.markdown("**Token IDs**")
-        st.code(" | ".join(map(str, input_ids)))
+def plot_embeddings_pca(embeddings_tensor: torch.Tensor, tokens: List[str]) -> Optional[go.Figure]:
+    """
+    Computes 2D PCA on token embeddings and renders interactive scatter plot.
+    """
+    if len(tokens) < 2:
+        return None
 
-def visualize_embeddings(hidden_states, tokens):
-    """Visualizes the initial embeddings using PCA."""
-    st.markdown("### Token Embeddings")
-    
-    # Extract the first hidden state (which is the output of the embedding layer)
-    # Shape: (batch_size, sequence_length, hidden_size)
-    embeddings = hidden_states[0][0].float().cpu().numpy()
-    
-    st.write(f"Embedding dimension: {embeddings.shape[1]}")
-    
-    # Apply PCA to reduce to 2 dimensions for visualization
-    if embeddings.shape[0] > 1:
-        pca = PCA(n_components=2)
-        embeddings_2d = pca.fit_transform(embeddings)
-        
-        fig = px.scatter(
-            x=embeddings_2d[:, 0], 
-            y=embeddings_2d[:, 1],
-            text=tokens,
-            title="2D PCA of Token Embeddings"
-        )
-        fig.update_traces(textposition='top center')
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.write("Not enough tokens to perform PCA visualization.")
+    # Handle shape (seq_len, dim) or (1, seq_len, dim)
+    if embeddings_tensor.dim() == 3:
+        embeddings_tensor = embeddings_tensor.squeeze(0)
 
-def visualize_attention(attentions, tokens, layer, head):
-    """Visualizes attention matrix for a specific layer and head."""
-    st.markdown(f"### Attention Head ({layer}, {head})")
+    X = embeddings_tensor.float().cpu()
+    n_samples = X.shape[0]
     
-    # attentions is a tuple of layers. Each element is (batch_size, num_heads, seq_len, seq_len)
-    if layer < len(attentions):
-        attn_matrix = attentions[layer][0, head].float().cpu().numpy()
-        
-        fig = px.imshow(
-            attn_matrix,
-            x=tokens,
-            y=tokens,
-            color_continuous_scale='Viridis',
-            title=f"Attention Weights (Layer {layer}, Head {head})"
-        )
-        fig.update_layout(template="plotly_dark")
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.error(f"Layer {layer} is out of bounds.")
+    if n_samples < 2:
+        return None
 
-def visualize_hidden_states(hidden_states, tokens, layer):
-    """Visualizes hidden states for a specific layer using PCA."""
-    st.markdown(f"### Hidden States (Layer {layer})")
-    
-    if layer < len(hidden_states):
-        h_states = hidden_states[layer][0].float().cpu().numpy()
-        
-        if h_states.shape[0] > 1:
-            pca = PCA(n_components=2)
-            h_states_2d = pca.fit_transform(h_states)
-            
-            fig = px.scatter(
-                x=h_states_2d[:, 0], 
-                y=h_states_2d[:, 1],
-                text=tokens,
-                title=f"2D PCA of Hidden States (Layer {layer})"
-            )
-            fig.update_traces(textposition='top center')
-            fig.update_layout(template="plotly_dark")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.write("Not enough tokens for PCA.")
-    else:
-        st.error(f"Layer {layer} is out of bounds.")
+    # Mean centering
+    X_mean = torch.mean(X, dim=0, keepdim=True)
+    X_centered = X - X_mean
 
-def visualize_logits(logits, tokenizer):
-    """Visualizes top tokens based on logits of the last generated step."""
-    st.markdown("### Next Token Prediction (Logits)")
+    # PCA via torch.pca_lowrank
+    q = min(2, n_samples, X.shape[1])
+    try:
+        _, _, V = torch.pca_lowrank(X_centered, q=q)
+        pca_coords = torch.matmul(X_centered, V[:, :2]).numpy()
+    except Exception:
+        # Fallback to numpy SVD
+        u, s, vt = np.linalg.svd(X_centered.numpy(), full_matrices=False)
+        pca_coords = np.dot(X_centered.numpy(), vt[:2].T)
+
+    labels = [f"[{i}] {t}" for i, t in enumerate(tokens)]
     
-    # logits shape: (batch_size, seq_len, vocab_size)
-    # We look at the logits of the last token in the sequence
-    last_step_logits = logits[0, -1, :].float().cpu().numpy()
-    
-    # Convert logits to probabilities
-    exp_logits = np.exp(last_step_logits - np.max(last_step_logits))
-    probs = exp_logits / exp_logits.sum()
-    
-    # Get top 5
-    top_indices = np.argsort(probs)[-5:][::-1]
-    top_probs = probs[top_indices]
-    top_tokens = [tokenizer.decode([idx]) for idx in top_indices]
-    
-    # Create bar chart
-    fig = px.bar(
-        x=top_tokens,
-        y=top_probs,
-        labels={'x': 'Token', 'y': 'Probability'},
-        title="Top 5 Next Token Predictions"
+    fig = px.scatter(
+        x=pca_coords[:, 0],
+        y=pca_coords[:, 1] if pca_coords.shape[1] > 1 else np.zeros_like(pca_coords[:, 0]),
+        text=labels,
+        title="2D PCA of Token Embeddings",
+        labels={'x': 'Principal Component 1', 'y': 'Principal Component 2'},
+        color=np.arange(len(tokens)),
+        color_continuous_scale="Viridis"
     )
-    fig.update_layout(template="plotly_dark")
-    st.plotly_chart(fig, use_container_width=True)
+    fig.update_traces(
+        textposition='top center',
+        marker=dict(size=12, opacity=0.85, line=dict(width=1, color='DarkSlateGrey'))
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        margin=dict(l=20, r=20, t=40, b=20),
+        coloraxis_showscale=False
+    )
+    return fig
 
-def visualize_generation(prompt, generated_sequence, tokenizer):
-    """Visualizes the step-by-step token generation."""
-    st.markdown("### Token Generation Process")
-    
-    # The generated sequence includes the prompt.
-    prompt_tokens = tokenizer(prompt)['input_ids']
-    new_tokens = generated_sequence[len(prompt_tokens):]
-    
-    current_text = prompt
-    st.write(f"**Prompt:** {prompt}")
-    
-    # Show how it was generated
-    st.markdown("#### Generation Steps:")
-    
-    # Display step-by-step in an expander or a list
-    steps = []
-    for i, token_id in enumerate(new_tokens):
-        token_str = tokenizer.decode([token_id])
-        current_text += token_str
-        steps.append(f"→ Step {i+1}: `{token_str}`")
-        
-    # Show first 10 and last 10 if it's too long
-    if len(steps) > 20:
-        for step in steps[:10]:
-            st.write(step)
-        st.write("...")
-        for step in steps[-10:]:
-            st.write(step)
+def plot_attention_heatmap(attention_matrix: torch.Tensor, tokens: List[str], layer_idx: int, head_idx: int) -> go.Figure:
+    """
+    Plots attention heatmap for a specific transformer layer and head.
+    attention_matrix is [batch, heads, seq_len, seq_len] or [heads, seq_len, seq_len].
+    """
+    if attention_matrix.dim() == 4:
+        attn = attention_matrix[0, head_idx].float().cpu().numpy()
+    elif attention_matrix.dim() == 3:
+        attn = attention_matrix[head_idx].float().cpu().numpy()
     else:
-        for step in steps:
-            st.write(step)
-            
-    st.write(f"**Final Response:** {tokenizer.decode(new_tokens)}")
+        attn = attention_matrix.float().cpu().numpy()
+
+    # Truncate tokens if longer than attention dimension
+    display_tokens = tokens[:attn.shape[0]]
+    if len(display_tokens) < attn.shape[0]:
+        display_tokens = display_tokens + [f"T{i}" for i in range(len(display_tokens), attn.shape[0])]
+
+    # Token labels with index
+    axis_labels = [f"[{i}] {t}" for i, t in enumerate(display_tokens)]
+
+    fig = px.imshow(
+        attn,
+        x=axis_labels,
+        y=axis_labels,
+        title=f"Attention Heatmap — Layer {layer_idx}, Head {head_idx}",
+        labels=dict(x="Key Tokens", y="Query Tokens", color="Attention"),
+        color_continuous_scale="Blues"
+    )
+    fig.update_layout(
+        template="plotly_dark",
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    return fig
+
+def plot_token_probabilities(predictions: List[Dict[str, Any]]) -> go.Figure:
+    """
+    Plots horizontal bar chart of top candidate tokens and their probability percentages.
+    """
+    tokens = [p["token"] for p in predictions][::-1]
+    probs = [p["prob"] * 100 for p in predictions][::-1]
+    percentages = [p["percentage"] for p in predictions][::-1]
+
+    fig = go.Figure(go.Bar(
+        x=probs,
+        y=tokens,
+        orientation='h',
+        text=percentages,
+        textposition='outside',
+        marker=dict(
+            color=probs,
+            colorscale='Blues',
+            line=dict(color='rgba(255, 255, 255, 0.4)', width=1)
+        )
+    ))
+    fig.update_layout(
+        title="Next Token Prediction Distribution (Logits Softmax)",
+        xaxis_title="Probability (%)",
+        yaxis_title="Predicted Token",
+        template="plotly_dark",
+        margin=dict(l=20, r=40, t=40, b=20),
+        xaxis=dict(range=[0, max(max(probs) * 1.25, 10)])
+    )
+    return fig
+
+def plot_hidden_states_progression(hidden_states: List[torch.Tensor]) -> Optional[go.Figure]:
+    """
+    Visualizes representation norms and variance across all transformer layers.
+    """
+    if not hidden_states:
+        return None
+
+    layer_indices = []
+    mean_norms = []
+    
+    for idx, h in enumerate(hidden_states):
+        # h: (1, seq_len, dim)
+        norm = torch.norm(h.float(), dim=-1).mean().item()
+        layer_indices.append(f"L{idx}" if idx > 0 else "Embed")
+        mean_norms.append(norm)
+
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=layer_indices,
+        y=mean_norms,
+        mode='lines+markers',
+        line=dict(color='#00ADB5', width=3),
+        marker=dict(size=8, color='#EEEEEE')
+    ))
+    fig.update_layout(
+        title="Hidden State L2 Norm Across Transformer Layers",
+        xaxis_title="Layer",
+        yaxis_title="Mean Hidden Vector L2 Norm",
+        template="plotly_dark",
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    return fig

@@ -1,0 +1,36 @@
+{
+  "id": "4c2e26a1-d592-4943-aae9-e449fb61a315",
+  "title": "Hi",
+  "messages": [
+    {
+      "id": "16e02e99-e801-4920-a265-3e2a45331c13",
+      "role": "user",
+      "content": "Hi",
+      "metadata": {}
+    },
+    {
+      "id": "c9d271d4-304e-4538-b6bb-8d9313400636",
+      "role": "assistant",
+      "content": "Hello! How can I assist you today? If you have any questions or need help understanding something, feel free to ask.",
+      "metadata": {
+        "sources": []
+      }
+    },
+    {
+      "id": "c1afdacd-2e07-4044-8eaa-78ced0783e69",
+      "role": "user",
+      "content": "What is AI?",
+      "metadata": {}
+    },
+    {
+      "id": "98a0c227-93ed-4b20-8bf1-7d0053f7e489",
+      "role": "assistant",
+      "content": "Artificial Intelligence (AI) refers to the simulation of human intelligence in machines that are programmed to think and learn like humans do. It involves creating algorithms and software that allow computers to perform tasks that typically require human intelligence.\n\nHere are some key points about AI:\n\n1. **Definition**: AI encompasses a",
+      "metadata": {
+        "sources": []
+      }
+    }
+  ],
+  "created_at": "2026-11-04T07:44:26.888423",
+  "updated_at": "2026-11-04T07:46:15.489896"
+}

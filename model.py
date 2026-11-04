@@ -1,62 +1,164 @@
+import os
+from threading import Thread
+from typing import List, Dict, Any, Tuple
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import streamlit as st
+from transformers import AutoModelForCausalLM, TextIteratorStreamer
 
-@st.cache_resource
-def load_model_and_tokenizer(model_name="Qwen/Qwen2.5-1.5B-Instruct"):
-    """
-    Loads the Hugging Face model and tokenizer.
-    Uses caching so it only loads once per session.
-    """
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    
-    # Load model with output_attentions and output_hidden_states to true
-    # This is required for the X-Ray visualizations
-    model = AutoModelForCausalLM.from_pretrained(
-        model_name,
-        device_map="auto", # Automatically use GPU if available
-        torch_dtype="auto",
-        output_attentions=True,
-        output_hidden_states=True
-    )
-    
-    return model, tokenizer
+os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
+os.environ["HF_HUB_DISABLE_FAST_DOWNLOAD"] = "1"
+os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
-def generate_response(model, tokenizer, prompt, temperature=0.7, top_k=50, top_p=0.9, max_new_tokens=128):
+@torch.no_grad()
+def load_model(model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"):
     """
-    Generates a response from the model and returns the output along with internal states.
+    Loads causal language model with appropriate precision and device placement.
+    Falls back to 0.5B if 1.5B is unavailable or fails due to memory.
     """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    dtype = torch.float16 if torch.cuda.is_available() else torch.float32
+
+    try:
+        model = AutoModelForCausalLM.from_pretrained(
+            model_name,
+            torch_dtype=dtype,
+            attn_implementation="eager",
+            trust_remote_code=True,
+            low_cpu_mem_usage=True,
+            local_files_only=True
+        )
+    except Exception:
+        try:
+            model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_dtype=dtype,
+                attn_implementation="eager",
+                trust_remote_code=True,
+                low_cpu_mem_usage=True
+            )
+        except Exception as e:
+            print(f"Warning: Failed loading {model_name} ({e}). Falling back to Qwen2.5-0.5B-Instruct...")
+            model = AutoModelForCausalLM.from_pretrained(
+                "Qwen/Qwen2.5-0.5B-Instruct",
+                torch_dtype=dtype,
+                attn_implementation="eager",
+                trust_remote_code=True,
+                low_cpu_mem_usage=True,
+                local_files_only=True
+            )
+
+    model.to(device)
+    model.eval()
+    return model
+
+def build_chat_prompt(tokenizer, messages: List[Dict[str, str]]) -> str:
+    """
+    Applies the model's native chat template (Qwen ChatML) to format multi-turn history.
+    """
+    try:
+        return tokenizer.apply_chat_template(
+            messages,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+    except Exception:
+        # Fallback manual ChatML formatting if template fails
+        formatted = ""
+        for m in messages:
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            formatted += f"<|im_start|>{role}\n{content}<|im_end|>\n"
+        formatted += "<|im_start|>assistant\n"
+        return formatted
+
+def stream_chat_response(
+    model,
+    tokenizer,
+    messages: List[Dict[str, str]],
+    max_new_tokens: int = 512,
+    temperature: float = 0.7,
+    top_p: float = 0.9,
+    top_k: int = 50
+) -> Tuple[TextIteratorStreamer, Thread]:
+    """
+    Streams multi-turn conversational responses using TextIteratorStreamer.
+    """
+    prompt = build_chat_prompt(tokenizer, messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     
-    # We want to capture the generated tokens and the states.
-    # We can use the generate method, but it might be easier to capture states
-    # by running a forward pass on the generated sequence afterwards, or using return_dict_in_generate.
+    streamer = TextIteratorStreamer(
+        tokenizer,
+        skip_prompt=True,
+        skip_special_tokens=True
+    )
     
-    with torch.no_grad():
-        outputs = model.generate(
-            **inputs,
-            max_new_tokens=max_new_tokens,
-            temperature=temperature,
-            top_k=top_k,
-            top_p=top_p,
-            do_sample=(temperature > 0.0),
-            return_dict_in_generate=True,
-            output_scores=True,
-            output_attentions=True,
-            output_hidden_states=True
-        )
-        
-    generated_sequence = outputs.sequences[0]
-    response_text = tokenizer.decode(generated_sequence[inputs.input_ids.shape[1]:], skip_special_tokens=True)
-    
-    # We also need the forward pass of the initial input to get the initial embeddings and attentions
-    with torch.no_grad():
-        forward_outputs = model(**inputs, output_attentions=True, output_hidden_states=True)
-        
-    return {
-        "response_text": response_text,
-        "inputs": inputs,
-        "generated_sequence": generated_sequence,
-        "generate_outputs": outputs,
-        "forward_outputs": forward_outputs
+    # Configure generation parameters
+    gen_kwargs = {
+        **inputs,
+        "streamer": streamer,
+        "max_new_tokens": max_new_tokens,
+        "pad_token_id": tokenizer.eos_token_id,
+        "use_cache": True
     }
+    
+    if temperature > 0:
+        gen_kwargs["do_sample"] = True
+        gen_kwargs["temperature"] = float(temperature)
+        gen_kwargs["top_p"] = float(top_p)
+        gen_kwargs["top_k"] = int(top_k)
+    else:
+        gen_kwargs["do_sample"] = False
+
+    thread = Thread(target=model.generate, kwargs=gen_kwargs)
+    thread.start()
+    return streamer, thread
+
+@torch.no_grad()
+def generate_response(
+    model,
+    tokenizer,
+    messages: List[Dict[str, str]],
+    max_new_tokens: int = 512,
+    temperature: float = 0.7,
+    top_p: float = 0.9,
+    top_k: int = 50
+) -> str:
+    """
+    Generates complete response synchronously for a multi-turn conversation.
+    """
+    prompt = build_chat_prompt(tokenizer, messages)
+    inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
+    
+    gen_kwargs = {
+        **inputs,
+        "max_new_tokens": max_new_tokens,
+        "pad_token_id": tokenizer.eos_token_id,
+        "use_cache": True
+    }
+    if temperature > 0:
+        gen_kwargs["do_sample"] = True
+        gen_kwargs["temperature"] = float(temperature)
+        gen_kwargs["top_p"] = float(top_p)
+        gen_kwargs["top_k"] = int(top_k)
+    else:
+        gen_kwargs["do_sample"] = False
+
+    outputs = model.generate(**gen_kwargs)
+    input_length = inputs.input_ids.shape[1]
+    return tokenizer.decode(outputs[0][input_length:], skip_special_tokens=True)
+
+@torch.no_grad()
+def get_model_internals(model, tokenizer, prompt: str):
+    """
+    Legacy helper for X-Ray extraction on single prompt string.
+    """
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=128).to(model.device)
+    outputs = model(**inputs, output_attentions=True, output_hidden_states=True)
+    return outputs, inputs
+
+@torch.no_grad()
+def simulate_generation_steps(model, tokenizer, prompt: str, max_steps: int = 5):
+    """
+    Legacy helper for step-by-step generation simulation.
+    """
+    from xray import simulate_token_generation
+    return simulate_token_generation(model, tokenizer, prompt, max_steps=max_steps)
