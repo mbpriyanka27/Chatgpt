@@ -25,55 +25,52 @@ def render_workspace_page(model, tokenizer):
     # Load user default settings from DB
     user_settings = database.get_user_settings(uid)
     user_row = database.get_user(uid) or {}
-    default_sys_prompt = user_row.get("default_system_prompt") or "You are a helpful AI assistant. Explain concepts clearly with examples."
+    default_sys_prompt = user_row.get("default_system_prompt") or "You are a helpful AI assistant. Answer accurately, clearly and concisely."
 
     # -------------------------------------------------------------
-    # Workspace Top Bar
+    # Workspace Top Bar: Generous spacing, clean alignment
     # -------------------------------------------------------------
-    col_head1, col_head2, col_head3, col_head4 = st.columns([0.45, 0.20, 0.15, 0.20])
+    col_left, col_right = st.columns([0.62, 0.38])
 
-    with col_head1:
-        st.subheader(f"💬 {memory.title}")
+    with col_left:
+        st.markdown(f"<h3 style='margin: 0; padding: 0; font-size: 20px; font-weight: 700; line-height: 1.3;'>💬 {memory.title}</h3>", unsafe_allow_html=True)
 
-    with col_head2:
-        # Per-chat RAG toggle
-        answer_from_docs = st.toggle("📄 Use Documents", value=True, help="Toggle document retrieval for questions")
-
-    with col_head3:
-        # Export Popover
-        with st.popover("📤 Export"):
-            st.markdown("##### Export Conversation")
-            msgs = memory.get_messages()
-            if msgs:
-                md_data = export_chat_as_markdown(uid, memory.title, msgs)
-                st.download_button(
-                    label="Download Markdown (.md)",
-                    data=md_data,
-                    file_name=f"{memory.title}.md",
-                    mime="text/markdown",
-                    use_container_width=True
-                )
-                try:
-                    pdf_data = export_chat_as_pdf(uid, memory.title, msgs)
+    with col_right:
+        c_rag, c_exp, c_ren = st.columns([0.48, 0.26, 0.26])
+        with c_rag:
+            answer_from_docs = st.toggle("📄 Use Docs", value=True, help="Toggle document RAG retrieval")
+        with c_exp:
+            with st.popover("📤 Export"):
+                st.markdown("##### Export Conversation")
+                msgs = memory.get_messages()
+                if msgs:
+                    md_data = export_chat_as_markdown(uid, memory.title, msgs)
                     st.download_button(
-                        label="Download PDF (.pdf)",
-                        data=pdf_data,
-                        file_name=f"{memory.title}.pdf",
-                        mime="application/pdf",
+                        label="Markdown (.md)",
+                        data=md_data,
+                        file_name=f"{memory.title}.md",
+                        mime="text/markdown",
                         use_container_width=True
                     )
-                except Exception as e:
-                    st.caption(f"PDF export note: {e}")
-            else:
-                st.caption("No messages to export yet.")
-
-    with col_head4:
-        # Chat Rename Popover
-        with st.popover("✏️ Rename"):
-            new_title = st.text_input("Edit Title", value=memory.title)
-            if st.button("Save Title", use_container_width=True):
-                memory.rename(new_title)
-                st.rerun()
+                    try:
+                        pdf_data = export_chat_as_pdf(uid, memory.title, msgs)
+                        st.download_button(
+                            label="PDF (.pdf)",
+                            data=pdf_data,
+                            file_name=f"{memory.title}.pdf",
+                            mime="application/pdf",
+                            use_container_width=True
+                        )
+                    except Exception as e:
+                        st.caption(f"PDF note: {e}")
+                else:
+                    st.caption("No messages to export yet.")
+        with c_ren:
+            with st.popover("✏️ Rename"):
+                new_title = st.text_input("New Title", value=memory.title)
+                if st.button("Save", use_container_width=True):
+                    memory.rename(new_title)
+                    st.rerun()
 
     # -------------------------------------------------------------
     # Render Conversation Messages or Welcome Screen
@@ -89,9 +86,9 @@ def render_workspace_page(model, tokenizer):
             metadata = msg.get("metadata", {})
 
             with st.chat_message(role):
-                # Editing mode for user turn
+                # In-place Editing for User Message
                 if role == "user" and st.session_state.get("editing_msg_idx") == idx:
-                    edit_val = st.text_area("Edit your message:", value=content, key=f"edit_ta_{idx}")
+                    edit_val = st.text_area("Edit message:", value=content, key=f"edit_ta_{idx}")
                     col_sv, col_cn = st.columns([0.25, 0.75])
                     with col_sv:
                         if st.button("Save & Resubmit", key=f"btn_sv_{idx}", type="primary"):
@@ -111,8 +108,8 @@ def render_workspace_page(model, tokenizer):
                     if sources:
                         render_source_chips(sources)
 
-                    # Action buttons under messages
-                    col_b1, col_b2, col_b3, col_b4, col_b5, _ = st.columns([0.14, 0.17, 0.16, 0.08, 0.08, 0.37])
+                    # Clean action buttons with ample breathing room
+                    col_b1, col_b2, col_b3, col_b4, col_b5, _ = st.columns([0.16, 0.20, 0.18, 0.10, 0.10, 0.26])
 
                     if role == "user":
                         with col_b1:
@@ -122,14 +119,14 @@ def render_workspace_page(model, tokenizer):
                     elif role == "assistant":
                         with col_b1:
                             with st.popover("📋 Copy"):
-                                st.text_area("Copy text", value=content, height=120)
+                                st.text_area("Copy Text", value=content, height=120)
                         with col_b2:
                             if st.button("🔄 Regenerate", key=f"regen_msg_{idx}"):
                                 memory.remove_last_assistant_message()
                                 st.session_state.regenerate_flag = True
                                 st.rerun()
                         with col_b3:
-                            if st.button("🔬 X-Ray", key=f"xray_msg_{idx}", help="Inspect transformer internals"):
+                            if st.button("🔬 X-Ray", key=f"xray_msg_{idx}", help="Inspect internal representations"):
                                 prior_prompt = messages[idx-1]["content"] if idx > 0 else content
                                 st.session_state.xray_target_text = prior_prompt
                                 with st.spinner("Analyzing transformer internals..."):
@@ -141,18 +138,20 @@ def render_workspace_page(model, tokenizer):
                         with col_b5:
                             st.button("👎", key=f"thumbs_down_{idx}", help="Needs improvement")
 
-    # Show inline X-Ray drawer if triggered
+    # Show inline X-Ray drawer when explicitly opened
     if st.session_state.get("show_inline_xray") and st.session_state.get("xray_data"):
         render_xray_drawer(st.session_state.xray_data, model, tokenizer)
 
     # -------------------------------------------------------------
-    # Input Processing & Streaming
+    # Chat Input & Fast Streaming Execution
     # -------------------------------------------------------------
     user_input = st.chat_input("Ask anything... (or upload documents from sidebar)")
     
-    # Check if a suggested prompt card was clicked
     if st.session_state.get("suggested_prompt"):
         user_input = st.session_state.pop("suggested_prompt")
+
+    # Dynamic token budget for snappy CPU inference (default 150 tokens)
+    token_limit = min(int(user_settings.get("max_tokens", 150)), 200)
 
     # Handle Regeneration
     if st.session_state.get("regenerate_flag"):
@@ -174,7 +173,7 @@ def render_workspace_page(model, tokenizer):
             with st.chat_message("assistant"):
                 streamer, thread = chat_engine.stream_turn(
                     ctx_msgs,
-                    max_new_tokens=int(user_settings.get("max_tokens", 512)),
+                    max_new_tokens=token_limit,
                     temperature=float(user_settings.get("temperature", 0.7)),
                     top_p=float(user_settings.get("top_p", 0.9)),
                     top_k=int(user_settings.get("top_k", 50))
@@ -183,8 +182,6 @@ def render_workspace_page(model, tokenizer):
                 thread.join()
 
             memory.add_message("assistant", response, metadata={"sources": ret_sources})
-            st.session_state.xray_target_text = prompt_to_run
-            st.session_state.xray_data = analyze_input_internals(model, tokenizer, prompt_to_run)
             st.rerun()
 
     # Handle New Message
@@ -204,7 +201,7 @@ def render_workspace_page(model, tokenizer):
         with st.chat_message("assistant"):
             streamer, thread = chat_engine.stream_turn(
                 ctx_msgs,
-                max_new_tokens=int(user_settings.get("max_tokens", 512)),
+                max_new_tokens=token_limit,
                 temperature=float(user_settings.get("temperature", 0.7)),
                 top_p=float(user_settings.get("top_p", 0.9)),
                 top_k=int(user_settings.get("top_k", 50))
@@ -213,7 +210,4 @@ def render_workspace_page(model, tokenizer):
             thread.join()
 
         memory.add_message("assistant", response, metadata={"sources": ret_sources})
-        st.session_state.xray_target_text = user_input
-        st.session_state.xray_data = analyze_input_internals(model, tokenizer, user_input)
         st.rerun()
-

@@ -8,6 +8,10 @@ os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 os.environ["HF_HUB_DISABLE_FAST_DOWNLOAD"] = "1"
 os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] = "1"
 
+# Optimal CPU thread configuration to prevent thread thrashing
+optimal_threads = max(1, min(4, (os.cpu_count() or 4) // 2 if (os.cpu_count() or 4) > 4 else (os.cpu_count() or 4)))
+torch.set_num_threads(optimal_threads)
+
 @torch.no_grad()
 def load_model(model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"):
     """
@@ -50,20 +54,25 @@ def load_model(model_name: str = "Qwen/Qwen2.5-1.5B-Instruct"):
     model.eval()
     return model
 
-def build_chat_prompt(tokenizer, messages: List[Dict[str, str]]) -> str:
+def build_chat_prompt(tokenizer, messages: List[Dict[str, str]], max_turns: int = 5) -> str:
     """
     Applies the model's native chat template (Qwen ChatML) to format multi-turn history.
+    Limits to recent turns to keep CPU context window compact and fast.
     """
+    trimmed = messages[-max_turns*2:] if len(messages) > max_turns*2 else messages
+    # Keep system prompt if present in original
+    if messages and messages[0].get("role") == "system" and trimmed[0].get("role") != "system":
+        trimmed = [messages[0]] + trimmed
+
     try:
         return tokenizer.apply_chat_template(
-            messages,
+            trimmed,
             tokenize=False,
             add_generation_prompt=True
         )
     except Exception:
-        # Fallback manual ChatML formatting if template fails
         formatted = ""
-        for m in messages:
+        for m in trimmed:
             role = m.get("role", "user")
             content = m.get("content", "")
             formatted += f"<|im_start|>{role}\n{content}<|im_end|>\n"
@@ -74,13 +83,13 @@ def stream_chat_response(
     model,
     tokenizer,
     messages: List[Dict[str, str]],
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 180,
     temperature: float = 0.7,
     top_p: float = 0.9,
     top_k: int = 50
 ) -> Tuple[TextIteratorStreamer, Thread]:
     """
-    Streams multi-turn conversational responses using TextIteratorStreamer.
+    Streams multi-turn conversational responses with low latency.
     """
     prompt = build_chat_prompt(tokenizer, messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
@@ -91,7 +100,6 @@ def stream_chat_response(
         skip_special_tokens=True
     )
     
-    # Configure generation parameters
     gen_kwargs = {
         **inputs,
         "streamer": streamer,
@@ -117,14 +125,11 @@ def generate_response(
     model,
     tokenizer,
     messages: List[Dict[str, str]],
-    max_new_tokens: int = 512,
+    max_new_tokens: int = 180,
     temperature: float = 0.7,
     top_p: float = 0.9,
     top_k: int = 50
 ) -> str:
-    """
-    Generates complete response synchronously for a multi-turn conversation.
-    """
     prompt = build_chat_prompt(tokenizer, messages)
     inputs = tokenizer(prompt, return_tensors="pt").to(model.device)
     
@@ -148,17 +153,11 @@ def generate_response(
 
 @torch.no_grad()
 def get_model_internals(model, tokenizer, prompt: str):
-    """
-    Legacy helper for X-Ray extraction on single prompt string.
-    """
-    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=128).to(model.device)
+    inputs = tokenizer(prompt, return_tensors="pt", truncation=True, max_length=64).to(model.device)
     outputs = model(**inputs, output_attentions=True, output_hidden_states=True)
     return outputs, inputs
 
 @torch.no_grad()
 def simulate_generation_steps(model, tokenizer, prompt: str, max_steps: int = 5):
-    """
-    Legacy helper for step-by-step generation simulation.
-    """
     from xray import simulate_token_generation
     return simulate_token_generation(model, tokenizer, prompt, max_steps=max_steps)
