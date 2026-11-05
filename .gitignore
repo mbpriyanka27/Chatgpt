@@ -6,9 +6,9 @@ __pycache__/
 .env
 serviceAccountKey.json
 *.db
-data/users/*/documents/*
-data/users/*/faiss_index/*
-data/users/*/exports/*
+data/
+backend/data/
+backend/__pycache__/
 
 # Next.js / Frontend
 frontend/.next/

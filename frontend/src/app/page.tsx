@@ -1,419 +1,805 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import ModelInspector, { VisualizationsPayload } from '../components/ModelInspector';
-import TelemetryHUD, { ModelInfo, ModelMetrics } from '../components/TelemetryHUD';
+import {
+  SparklesIcon, SendIcon, StopIcon, PaperclipIcon,
+  CopyIcon, RegenerateIcon, ThumbsUpIcon, ThumbsDownIcon,
+  DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon
+} from '../components/Icons';
+import { Sidebar, ChatItem } from '../components/Sidebar';
+import { MarkdownRenderer } from '../components/MarkdownRenderer';
+import { AuthModal } from '../components/AuthModal';
+import { DocumentManagerModal } from '../components/DocumentManagerModal';
+import { ProfileSettingsModal } from '../components/ProfileSettingsModal';
 
-export interface ChatMessage {
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+
+interface MessageItem {
   id: string;
-  role: 'user' | 'assistant';
+  role: 'user' | 'assistant' | 'system';
   content: string;
-  visualizations?: VisualizationsPayload;
-  metrics?: ModelMetrics;
-  timestamp: string;
+  sources?: Array<{ filename: string; page: number; snippet: string }>;
+  feedback?: string;
+  created_at?: string;
 }
 
-export default function Home() {
-  const [prompt, setPrompt] = useState<string>('');
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [loading, setLoading] = useState<boolean>(false);
-  const [modelInfo, setModelInfo] = useState<ModelInfo | null>(null);
-  const [activeMessageId, setActiveMessageId] = useState<string | null>(null);
+export default function ChatGPTApp() {
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [chats, setChats] = useState<ChatItem[]>([]);
+  const [activeChatId, setActiveChatId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<MessageItem[]>([]);
+  const [inputPrompt, setInputPrompt] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [useRag, setUseRag] = useState(false);
+  const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [docCount, setDocCount] = useState(0);
 
-  // Generation Controls
-  const [temperature, setTemperature] = useState<number>(0.7);
-  const [topK, setTopK] = useState<number>(50);
-  const [topP, setTopP] = useState<number>(0.9);
-  const [maxTokens, setMaxTokens] = useState<number>(30);
-  const [concise, setConcise] = useState<boolean>(true);
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(true);
+  // Modals & Drawers
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isDocsOpen, setIsDocsOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [expandedSources, setExpandedSources] = useState<{ [msgId: string]: boolean }>({});
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
+  const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Fetch model info on startup
+  // Initial authentication & session check
   useEffect(() => {
-    async function loadInfo() {
+    const savedToken = localStorage.getItem('chatgpt_token');
+    const savedUser = localStorage.getItem('chatgpt_user');
+    if (savedToken && savedUser) {
+      setToken(savedToken);
       try {
-        const res = await fetch('http://localhost:8080/api/info');
-        if (res.ok) {
-          const data: ModelInfo = await res.json();
-          setModelInfo(data);
-        }
-      } catch (err) {
-        console.warn('Backend not yet reachable on startup:', err);
+        setUser(JSON.parse(savedUser));
+      } catch (e) {
+        // Fallback
       }
+    } else {
+      // Auto-open auth modal if not signed in
+      setIsAuthOpen(true);
     }
-    loadInfo();
   }, []);
 
-  // Auto-scroll on new messages
+  // Keyboard shortcuts (Ctrl+Shift+O = new chat, Ctrl+K = search)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'o') {
+        e.preventDefault();
+        handleNewChat();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [token]);
+
+  // Load chats on login
+  useEffect(() => {
+    if (token) {
+      loadChats();
+      loadDocCount();
+    }
+  }, [token]);
+
+  // Load messages when active chat changes
+  useEffect(() => {
+    if (token && activeChatId) {
+      loadChatMessages(activeChatId);
+    } else {
+      setMessages([]);
+    }
+  }, [activeChatId, token]);
+
+  // Auto-scroll to bottom on new message / streaming token
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, loading]);
+  }, [messages, isStreaming]);
 
-  const handleSend = async (userPromptText?: string) => {
-    const textToSend = (userPromptText !== undefined ? userPromptText : prompt).trim();
-    if (!textToSend || loading) return;
+  // Adjust textarea height dynamically
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 180)}px`;
+    }
+  }, [inputPrompt]);
 
-    const userMsgId = 'msg-' + Date.now();
-    const newMessages: ChatMessage[] = [
-      ...messages,
-      {
-        id: userMsgId,
-        role: 'user',
-        content: textToSend,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      },
-    ];
-
-    setMessages(newMessages);
-    setPrompt('');
-    setLoading(true);
-
+  const loadChats = async () => {
+    if (!token) return;
     try {
-      const res = await fetch('http://localhost:8080/api/generate', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: textToSend,
-          temperature: temperature,
-          top_k: topK,
-          top_p: topP,
-          max_new_tokens: maxTokens,
-          concise: concise,
-          layer: 0,
-          head: 0,
-        }),
+      const res = await fetch(`${API_BASE_URL}/api/chats`, {
+        headers: { Authorization: `Bearer ${token}` }
       });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        throw new Error(data.detail || 'Failed to infer response');
+      if (res.ok) {
+        const data = await res.json();
+        setChats(data);
+        if (data.length > 0 && !activeChatId) {
+          setActiveChatId(data[0].id);
+        }
       }
-
-      const assistantMsgId = 'msg-' + (Date.now() + 1);
-      const assistantMessage: ChatMessage = {
-        id: assistantMsgId,
-        role: 'assistant',
-        content: data.response,
-        visualizations: data.visualizations,
-        metrics: data.metrics,
-        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-      };
-
-      if (data.model_info) {
-        setModelInfo(data.model_info);
-      }
-
-      setMessages([...newMessages, assistantMessage]);
-      setActiveMessageId(assistantMsgId);
-    } catch (err: unknown) {
-      console.error(err);
-      const errMsg = err instanceof Error ? err.message : 'Unknown inference error';
-      const errorMsgId = 'msg-' + (Date.now() + 1);
-      setMessages([
-        ...newMessages,
-        {
-          id: errorMsgId,
-          role: 'assistant',
-          content: `⚠️ Engine Error: ${errMsg}\n\nPlease ensure the FastAPI backend is running on http://localhost:8080.`,
-          timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        },
-      ]);
-    } finally {
-      setLoading(false);
+    } catch (err) {
+      console.error('Error loading chats:', err);
     }
   };
 
-  const activeMessage = messages.find((m) => m.id === activeMessageId) ||
-    [...messages].reverse().find((m) => m.role === 'assistant' && m.visualizations);
+  const loadDocCount = async () => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/documents`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setDocCount(data.length);
+      }
+    } catch (e) {}
+  };
 
-  const presets = [
-    { label: 'Paris Capital', prompt: 'The capital of France is' },
-    { label: 'Sky Color', prompt: 'Why is the sky blue?' },
-    { label: 'Attention Mechanism', prompt: 'Explain the transformer attention mechanism in one sentence.' },
-    { label: 'Python Code', prompt: 'def binary_search(arr, target):' },
+  const loadChatMessages = async (chatId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chats/${chatId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setMessages(data.messages || []);
+      }
+    } catch (err) {
+      console.error('Error loading messages:', err);
+    }
+  };
+
+  const handleNewChat = async () => {
+    if (!token) {
+      setIsAuthOpen(true);
+      return;
+    }
+    setActiveChatId(null);
+    setMessages([]);
+    textareaRef.current?.focus();
+  };
+
+  const handleRenameChat = async (chatId: string, newTitle: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chats/${chatId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ title: newTitle })
+      });
+      if (res.ok) {
+        setChats((prev) =>
+          prev.map((c) => (c.id === chatId ? { ...c, title: newTitle } : c))
+        );
+      }
+    } catch (err) {
+      console.error('Error renaming chat:', err);
+    }
+  };
+
+  const handleDeleteChat = async (chatId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chats/${chatId}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        setChats((prev) => prev.filter((c) => c.id !== chatId));
+        if (activeChatId === chatId) {
+          setActiveChatId(null);
+          setMessages([]);
+        }
+      }
+    } catch (err) {
+      console.error('Error deleting chat:', err);
+    }
+  };
+
+  const handleTogglePin = async (chatId: string) => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/chats/${chatId}/pin`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setChats((prev) =>
+          prev.map((c) => (c.id === chatId ? { ...c, is_pinned: data.is_pinned } : c))
+        );
+      }
+    } catch (err) {
+      console.error('Error toggling pin:', err);
+    }
+  };
+
+  const handleSendMessage = async (textToSend?: string) => {
+    const text = (textToSend !== undefined ? textToSend : inputPrompt).trim();
+    if (!text || isStreaming) return;
+    if (!token) {
+      setIsAuthOpen(true);
+      return;
+    }
+
+    setInputPrompt('');
+    const userMsgId = 'user-' + Date.now();
+    const assistantMsgId = 'asst-' + Date.now();
+
+    // Append user message immediately to state
+    const newMessages: MessageItem[] = [
+      ...messages,
+      { id: userMsgId, role: 'user', content: text, created_at: new Date().toISOString() },
+      { id: assistantMsgId, role: 'assistant', content: '', created_at: new Date().toISOString() }
+    ];
+    setMessages(newMessages);
+    setIsStreaming(true);
+
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          chat_id: activeChatId,
+          prompt: text,
+          use_rag: useRag,
+          model: selectedModel,
+          temperature: user?.temperature || 0.7
+        }),
+        signal: abortController.signal
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.detail || 'Streaming failed');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let streamedContent = '';
+      let incomingSources: any[] = [];
+
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          const chunkText = decoder.decode(value, { stream: true });
+          const lines = chunkText.split('\n');
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const payload = JSON.parse(line.slice(6));
+                if (payload.event === 'start') {
+                  if (payload.chat_id && !activeChatId) {
+                    setActiveChatId(payload.chat_id);
+                    loadChats();
+                  }
+                  if (payload.sources && payload.sources.length > 0) {
+                    incomingSources = payload.sources;
+                  }
+                } else if (payload.event === 'chunk') {
+                  streamedContent += payload.text;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: streamedContent, sources: incomingSources }
+                        : m
+                    )
+                  );
+                }
+              } catch (e) {
+                // Ignore partial JSON
+              }
+            }
+          }
+        }
+      }
+    } catch (err: any) {
+      if (err.name !== 'AbortError') {
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === assistantMsgId
+              ? { ...m, content: `⚠️ **Error during inference**: ${err.message}` }
+              : m
+          )
+        );
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+      loadChats();
+    }
+  };
+
+  const handleStopGenerating = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      setIsStreaming(false);
+    }
+  };
+
+  const handleFeedback = async (messageId: string, feedbackType: 'like' | 'dislike') => {
+    if (!token) return;
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/messages/${messageId}/feedback`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({ feedback: feedbackType })
+      });
+      if (res.ok) {
+        setMessages((prev) =>
+          prev.map((m) => (m.id === messageId ? { ...m, feedback: feedbackType } : m))
+        );
+      }
+    } catch (err) {
+      console.error('Feedback error:', err);
+    }
+  };
+
+  const handleCopyMessage = (content: string, msgId: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMsgId(msgId);
+    setTimeout(() => setCopiedMsgId(null), 2000);
+  };
+
+  const handleExport = (format: 'markdown' | 'pdf' | 'json') => {
+    if (!activeChatId || !token) return;
+    const url = `${API_BASE_URL}/api/chats/${activeChatId}/export?format=${format}`;
+    window.open(url, '_blank');
+  };
+
+  const handleClearAllChats = async () => {
+    if (!token) return;
+    if (confirm('Clear all your chat history? This cannot be undone.')) {
+      await fetch(`${API_BASE_URL}/api/chats`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setChats([]);
+      setActiveChatId(null);
+      setMessages([]);
+      setIsSettingsOpen(false);
+    }
+  };
+
+  const starterPromptCards = [
+    {
+      title: 'Explain Quantum Computing',
+      prompt: 'Explain quantum computing and superposition using simple real-world analogies.'
+    },
+    {
+      title: 'Debug Python Async Code',
+      prompt: 'Help me debug this FastAPI async event generator that streams tokens over Server-Sent Events.'
+    },
+    {
+      title: 'Summarize Document (RAG)',
+      prompt: 'Summarize the primary conclusions and citations from my uploaded document library.'
+    },
+    {
+      title: 'Architect a Microservice',
+      prompt: 'Draft an architectural design for a high-concurrency microservice with PostgreSQL and Redis.'
+    }
   ];
 
   return (
-    <div className="app-layout">
-      {/* Top Universal Telemetry HUD */}
-      <header className="app-topbar">
-        <div className="brand-group">
-          <button
-            className="sidebar-toggle-btn"
-            onClick={() => setSidebarOpen(!sidebarOpen)}
-            title="Toggle Sidebar"
-          >
-            &#9776;
-          </button>
-          <div className="brand-logo">
-            <span className="logo-pulse">&#9672;</span>
-            <span className="brand-name">LLM X-RAY</span>
-            <span className="brand-version">v2.0 Neural Inspector</span>
+    <div className="flex h-screen w-screen overflow-hidden bg-[#0e0e17] text-white font-sans antialiased">
+      {/* Sidebar Navigation */}
+      <Sidebar
+        chats={chats}
+        activeChatId={activeChatId}
+        onSelectChat={(id) => setActiveChatId(id)}
+        onNewChat={handleNewChat}
+        onRenameChat={handleRenameChat}
+        onDeleteChat={handleDeleteChat}
+        onTogglePin={handleTogglePin}
+        user={user}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenDocuments={() => setIsDocsOpen(true)}
+        onLogout={() => {
+          localStorage.removeItem('chatgpt_token');
+          localStorage.removeItem('chatgpt_user');
+          setToken(null);
+          setUser(null);
+          setChats([]);
+          setMessages([]);
+          setIsAuthOpen(true);
+        }}
+        onOpenAuth={() => setIsAuthOpen(true)}
+        isOpenMobile={isMobileSidebarOpen}
+        onCloseMobile={() => setIsMobileSidebarOpen(false)}
+      />
+
+      {/* Main Chat Canvas */}
+      <main className="flex-1 flex flex-col h-full bg-[#181824] relative overflow-hidden">
+        {/* Top Header Bar */}
+        <header className="flex items-center justify-between px-4 py-2.5 border-b border-[rgba(255,255,255,0.08)] bg-[#181824]/90 backdrop-blur z-20">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setIsMobileSidebarOpen(true)}
+              className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.08)]"
+            >
+              <MenuIcon className="w-5 h-5" />
+            </button>
+
+            {/* Model Selector Dropdown */}
+            <div className="relative">
+              <select
+                value={selectedModel}
+                onChange={(e) => setSelectedModel(e.target.value)}
+                className="bg-[#242436] hover:bg-[#2c2c42] border border-[rgba(255,255,255,0.1)] text-white text-xs font-semibold rounded-xl px-3 py-1.5 appearance-none pr-7 cursor-pointer transition-colors focus:outline-none focus:border-emerald-500"
+              >
+                <option value="llama-3.3-70b-versatile">⚡ LLaMA 3.3 70B (Hosted)</option>
+                <option value="gpt-4o-mini">🧠 GPT-4o-mini (Hosted)</option>
+                <option value="qwen/qwen-2.5-72b-instruct">🚀 Qwen 2.5 72B (Hosted)</option>
+              </select>
+              <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">
+                ▼
+              </div>
+            </div>
+
+            {/* Document Grounding Indicator */}
+            {docCount > 0 && (
+              <button
+                onClick={() => setUseRag(!useRag)}
+                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors border ${
+                  useRag
+                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
+                    : 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.08)] text-gray-400 hover:text-white'
+                }`}
+              >
+                <FileTextIcon className="w-3.5 h-3.5" />
+                <span>RAG Grounding: {useRag ? 'Active' : 'Off'}</span>
+                <span className="px-1.5 py-0.2 bg-emerald-500/20 rounded-full text-[10px] text-emerald-400 font-mono">
+                  {docCount} docs
+                </span>
+              </button>
+            )}
           </div>
-        </div>
 
-        <TelemetryHUD
-          metrics={activeMessage?.metrics}
-          info={modelInfo || undefined}
-        />
-      </header>
-
-      <div className="app-body">
-        {/* Left Control Panel / Sidebar */}
-        <aside className={`app-sidebar ${sidebarOpen ? 'open' : 'closed'}`}>
-          <button
-            className="btn-new-analysis"
-            onClick={() => {
-              setMessages([]);
-              setActiveMessageId(null);
-            }}
-          >
-            <span className="btn-icon">+</span>
-            <span>New Neural Session</span>
-          </button>
-
-          {/* Prompt Presets */}
-          <div className="sidebar-section">
-            <span className="sidebar-heading">🔬 Quick Diagnostic Presets</span>
-            <div className="presets-list">
-              {presets.map((p) => (
+          {/* Top Right Actions */}
+          <div className="flex items-center gap-2">
+            {activeChatId && (
+              <div className="flex items-center gap-1">
                 <button
-                  key={p.label}
-                  className="preset-pill-btn"
-                  onClick={() => handleSend(p.prompt)}
-                  disabled={loading}
+                  onClick={() => handleExport('markdown')}
+                  title="Export conversation as Markdown"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-gray-300 hover:text-white transition-colors"
                 >
-                  <span className="preset-icon">&#10148;</span>
-                  <span className="preset-label">{p.label}</span>
+                  <DownloadIcon className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Export .MD</span>
                 </button>
-              ))}
-            </div>
+                <button
+                  onClick={() => handleExport('pdf')}
+                  title="Export conversation as PDF"
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-gray-300 hover:text-white transition-colors"
+                >
+                  <DownloadIcon className="w-3.5 h-3.5" />
+                  <span className="hidden md:inline">Export PDF</span>
+                </button>
+              </div>
+            )}
           </div>
+        </header>
 
-          {/* Model Inference Parameters */}
-          <div className="sidebar-section">
-            <span className="sidebar-heading">⚙️ Hyperparameter Controls</span>
-
-            <div className="setting-card">
-              <label className="toggle-label">
-                <input
-                  type="checkbox"
-                  checked={concise}
-                  onChange={(e) => setConcise(e.target.checked)}
-                />
-                <div className="toggle-text">
-                  <span className="toggle-title">⚡ Fast Mode (CPU Optimized)</span>
-                  <span className="toggle-desc">Answers in 1-2 direct sentences for rapid activation capture</span>
+        {/* Message Feed / Workspace */}
+        <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
+          <div className="max-w-3xl mx-auto space-y-6">
+            {/* Empty State / Welcome Screen */}
+            {messages.length === 0 && (
+              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
+                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-xl shadow-emerald-900/40 mb-4">
+                  <SparklesIcon className="w-7 h-7" />
                 </div>
-              </label>
-            </div>
+                <h1 className="text-2xl font-bold text-white mb-2">
+                  Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'},{' '}
+                  {user?.display_name || 'Friend'}
+                </h1>
+                <p className="text-sm text-gray-400 max-w-md mb-8">
+                  What can I help you discover, build, or analyze today? Ask a question or ground answers with your uploaded files.
+                </p>
 
-            <div className="slider-card">
-              <div className="slider-label-row">
-                <span>Temperature</span>
-                <span className="font-mono">{temperature.toFixed(2)}</span>
-              </div>
-              <input
-                type="range"
-                min={0}
-                max={1.5}
-                step={0.05}
-                value={temperature}
-                onChange={(e) => setTemperature(parseFloat(e.target.value))}
-                className="slider-range"
-              />
-            </div>
-
-            <div className="slider-card">
-              <div className="slider-label-row">
-                <span>Max New Tokens</span>
-                <span className="font-mono">{maxTokens}</span>
-              </div>
-              <input
-                type="range"
-                min={5}
-                max={128}
-                step={5}
-                value={maxTokens}
-                onChange={(e) => setMaxTokens(parseInt(e.target.value))}
-                className="slider-range"
-              />
-            </div>
-
-            <div className="slider-card">
-              <div className="slider-label-row">
-                <span>Top-P (Nucleus)</span>
-                <span className="font-mono">{topP.toFixed(2)}</span>
-              </div>
-              <input
-                type="range"
-                min={0.1}
-                max={1.0}
-                step={0.05}
-                value={topP}
-                onChange={(e) => setTopP(parseFloat(e.target.value))}
-                className="slider-range"
-              />
-            </div>
-
-            <div className="slider-card">
-              <div className="slider-label-row">
-                <span>Top-K Sampling</span>
-                <span className="font-mono">{topK}</span>
-              </div>
-              <input
-                type="range"
-                min={1}
-                max={100}
-                step={1}
-                value={topK}
-                onChange={(e) => setTopK(parseInt(e.target.value))}
-                className="slider-range"
-              />
-            </div>
-          </div>
-
-          {/* Model Card Info */}
-          <div className="sidebar-section info-card">
-            <span className="sidebar-heading">Architecture Metadata</span>
-            <div className="arch-specs-list font-mono">
-              <div className="spec-row">
-                <span>Model:</span>
-                <span className="spec-val">Qwen2.5-0.5B</span>
-              </div>
-              <div className="spec-row">
-                <span>Layers:</span>
-                <span className="spec-val">{modelInfo?.num_layers ?? 24} Blocks</span>
-              </div>
-              <div className="spec-row">
-                <span>Attention:</span>
-                <span className="spec-val">{modelInfo?.num_heads ?? 14} Heads (GQA)</span>
-              </div>
-              <div className="spec-row">
-                <span>Hidden Dim:</span>
-                <span className="spec-val">{modelInfo?.hidden_size ?? 896}</span>
-              </div>
-              <div className="spec-row">
-                <span>Vocab Size:</span>
-                <span className="spec-val">{modelInfo?.vocab_size ?? 151936}</span>
-              </div>
-            </div>
-          </div>
-        </aside>
-
-        {/* Main Center Area: Split between Conversation & Diagnostics */}
-        <main className="main-stage">
-          {/* Top Stage: Active Visualizations Explorer */}
-          <div className="stage-visualizations-pane">
-            <ModelInspector
-              visualizations={activeMessage?.visualizations}
-              prompt={messages.find((m) => m.role === 'user')?.content || ''}
-              numLayers={modelInfo?.num_layers ?? 24}
-              numHeads={modelInfo?.num_heads ?? 14}
-            />
-          </div>
-
-          {/* Bottom Stage: Chat Stream and Diagnostic Log */}
-          <div className="stage-chat-pane">
-            <div className="chat-messages-scroll">
-              {messages.length === 0 ? (
-                <div className="empty-chat-welcome">
-                  <div className="welcome-icon">&#10024;</div>
-                  <h3>Welcome to LLM X-Ray</h3>
-                  <p>
-                    Enter a prompt or choose a diagnostic preset from the sidebar to visualize
-                    attention head matrices, 2D embedding PCA representations, and next-token prediction logits.
-                  </p>
-                </div>
-              ) : (
-                messages.map((msg) => (
-                  <div
-                    key={msg.id}
-                    className={`chat-bubble-row ${msg.role} ${activeMessageId === msg.id ? 'active-inspected' : ''}`}
-                    onClick={() => {
-                      if (msg.visualizations) setActiveMessageId(msg.id);
-                    }}
-                  >
-                    <div className="bubble-avatar">
-                      {msg.role === 'user' ? '👤' : '⚛️'}
-                    </div>
-                    <div className="bubble-content-card">
-                      <div className="bubble-header">
-                        <span className="bubble-author">
-                          {msg.role === 'user' ? 'Prompt Input' : 'Qwen2.5-0.5B Inference'}
-                        </span>
-                        <span className="bubble-timestamp">{msg.timestamp}</span>
-                        {msg.visualizations && (
-                          <span className="bubble-inspect-tag">
-                            {activeMessageId === msg.id ? '● Inspected' : 'Click to inspect'}
-                          </span>
-                        )}
+                {/* 4 Starter Prompt Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
+                  {starterPromptCards.map((card, i) => (
+                    <button
+                      key={i}
+                      onClick={() => handleSendMessage(card.prompt)}
+                      className="p-4 rounded-2xl bg-[#202030] hover:bg-[#28283c] border border-[rgba(255,255,255,0.06)] hover:border-emerald-500/30 text-left transition-all shadow-sm group"
+                    >
+                      <div className="text-sm font-semibold text-white group-hover:text-emerald-300 mb-1">
+                        {card.title}
                       </div>
-                      <div className="bubble-text">{msg.content}</div>
-                      {msg.metrics && (
-                        <div className="bubble-telemetry-pill font-mono">
-                          <span>⚡ {msg.metrics.total_latency_ms} ms</span>
-                          <span>&bull;</span>
-                          <span>{msg.metrics.tokens_per_second} tok/s</span>
-                          <span>&bull;</span>
-                          <span>{msg.metrics.prompt_tokens} in / {msg.metrics.generated_tokens} out</span>
+                      <div className="text-xs text-gray-400 line-clamp-2">
+                        {card.prompt}
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Conversation Messages */}
+            {messages.map((msg) => {
+              const isUser = msg.role === 'user';
+
+              return (
+                <div key={msg.id} className="group relative flex gap-4 text-sm leading-relaxed">
+                  {/* Avatar */}
+                  <div className="flex-shrink-0 mt-0.5">
+                    {isUser ? (
+                      <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/40 text-blue-300 flex items-center justify-center font-bold text-xs uppercase shadow-sm">
+                        {user?.display_name ? user.display_name.charAt(0) : 'U'}
+                      </div>
+                    ) : (
+                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-900/30">
+                        <SparklesIcon className="w-4 h-4" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Message Body */}
+                  <div className="flex-1 overflow-hidden space-y-2">
+                    <div className="font-semibold text-xs text-gray-400 flex items-center gap-2">
+                      <span>{isUser ? user?.display_name || 'You' : 'ChatGPT'}</span>
+                      {msg.created_at && (
+                        <span className="text-[10px] text-gray-500 font-normal">
+                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-[#ececf1] leading-relaxed">
+                      {isUser ? (
+                        <div className="whitespace-pre-wrap">{msg.content}</div>
+                      ) : (
+                        <>
+                          <MarkdownRenderer content={msg.content} />
+                          {isStreaming && msg === messages[messages.length - 1] && (
+                            <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle" />
+                          )}
+                        </>
+                      )}
+                    </div>
+
+                    {/* RAG Source Citation Chips */}
+                    {msg.sources && msg.sources.length > 0 && (
+                      <div className="mt-3 pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                        <div className="text-[11px] font-semibold text-cyan-400 mb-1.5 flex items-center gap-1.5">
+                          <FileTextIcon className="w-3.5 h-3.5" />
+                          <span>Sources Grounding ({msg.sources.length}):</span>
                         </div>
+                        <div className="flex flex-wrap gap-2">
+                          {msg.sources.map((src, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() =>
+                                setExpandedSources((prev) => ({
+                                  ...prev,
+                                  [`${msg.id}-${idx}`]: !prev[`${msg.id}-${idx}`]
+                                }))
+                              }
+                              className="cursor-pointer px-2.5 py-1 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/40 text-xs text-cyan-300 transition-colors"
+                            >
+                              <div className="font-mono text-[11px]">
+                                📄 {src.filename} • p.{src.page}
+                              </div>
+                              {expandedSources[`${msg.id}-${idx}`] && (
+                                <div className="mt-1.5 pt-1.5 border-t border-cyan-800/40 text-[11px] text-gray-300 italic">
+                                  "{src.snippet}"
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Action Bar */}
+                    <div className="flex items-center gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400">
+                      <button
+                        onClick={() => handleCopyMessage(msg.content, msg.id)}
+                        className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
+                        title="Copy message"
+                      >
+                        {copiedMsgId === msg.id ? (
+                          <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
+                        ) : (
+                          <CopyIcon className="w-3.5 h-3.5" />
+                        )}
+                      </button>
+
+                      {!isUser && (
+                        <>
+                          <button
+                            onClick={() => {
+                              // Find preceding user prompt
+                              const msgIndex = messages.indexOf(msg);
+                              const prevPrompt = messages[msgIndex - 1]?.content;
+                              if (prevPrompt) handleSendMessage(prevPrompt);
+                            }}
+                            className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
+                            title="Regenerate response"
+                          >
+                            <RegenerateIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(msg.id, 'like')}
+                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] ${
+                              msg.feedback === 'like' ? 'text-emerald-400' : 'hover:text-white'
+                            }`}
+                            title="Good response"
+                          >
+                            <ThumbsUpIcon className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => handleFeedback(msg.id, 'dislike')}
+                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] ${
+                              msg.feedback === 'dislike' ? 'text-red-400' : 'hover:text-white'
+                            }`}
+                            title="Bad response"
+                          >
+                            <ThumbsDownIcon className="w-3.5 h-3.5" />
+                          </button>
+                        </>
+                      )}
+
+                      {isUser && (
+                        <button
+                          onClick={() => {
+                            setInputPrompt(msg.content);
+                            textareaRef.current?.focus();
+                          }}
+                          className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
+                          title="Edit message"
+                        >
+                          <EditIcon className="w-3.5 h-3.5" />
+                        </button>
                       )}
                     </div>
                   </div>
-                ))
-              )}
-
-              {loading && (
-                <div className="chat-bubble-row assistant loading-bubble">
-                  <div className="bubble-avatar rotating">⚛️</div>
-                  <div className="bubble-content-card loading-card">
-                    <div className="loading-shimmer">
-                      <span>Probing transformer layers, attention heads & generating response...</span>
-                    </div>
-                  </div>
                 </div>
-              )}
-              <div ref={messagesEndRef} />
-            </div>
+              );
+            })}
 
-            {/* Prompt Input Field */}
-            <div className="chat-input-bar">
-              <div className="input-box-wrapper">
-                <input
-                  type="text"
-                  className="prompt-input-field"
-                  placeholder="Enter a prompt to inspect internal neural activations (e.g. 'The capital of France is')..."
-                  value={prompt}
-                  onChange={(e) => setPrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  disabled={loading}
-                />
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {/* Floating Stop Generating Control */}
+        {isStreaming && (
+          <div className="absolute bottom-28 left-0 right-0 flex justify-center z-20 pointer-events-none">
+            <button
+              onClick={handleStopGenerating}
+              className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-[#232336] hover:bg-[#2c2c44] border border-[rgba(255,255,255,0.15)] text-xs font-semibold text-white shadow-xl transition-all hover:scale-105"
+            >
+              <StopIcon className="w-3.5 h-3.5 text-red-400" />
+              <span>Stop generating</span>
+            </button>
+          </div>
+        )}
+
+        {/* Bottom Input Area */}
+        <div className="p-4 bg-[#181824]/95 border-t border-[rgba(255,255,255,0.08)]">
+          <div className="max-w-3xl mx-auto">
+            {/* Input Wrapper */}
+            <div className="relative rounded-2xl bg-[#202030] border border-[rgba(255,255,255,0.1)] focus-within:border-emerald-500/60 shadow-xl transition-colors">
+              <textarea
+                ref={textareaRef}
+                rows={1}
+                value={inputPrompt}
+                onChange={(e) => setInputPrompt(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage();
+                  }
+                }}
+                placeholder="Ask anything or request document analysis..."
+                className="w-full bg-transparent px-4 pt-3.5 pb-10 text-sm text-white placeholder-gray-400 focus:outline-none resize-none font-sans"
+              />
+
+              {/* Bottom Control Icons */}
+              <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setIsDocsOpen(true)}
+                    title="Upload or manage documents (PDF, DOCX, TXT, CSV, JSON)"
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors flex items-center gap-1.5 text-xs"
+                  >
+                    <PaperclipIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Attach file</span>
+                  </button>
+
+                  <label className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={useRag}
+                      onChange={(e) => setUseRag(e.target.checked)}
+                      className="accent-emerald-500 rounded"
+                    />
+                    <span className="text-[11px]">Search my documents</span>
+                  </label>
+                </div>
+
+                {/* Send / Stop Action */}
                 <button
-                  className="btn-send-prompt"
-                  onClick={() => handleSend()}
-                  disabled={!prompt.trim() || loading}
-                  id="btn-send"
+                  onClick={() => (isStreaming ? handleStopGenerating() : handleSendMessage())}
+                  disabled={!inputPrompt.trim() && !isStreaming}
+                  className={`p-2 rounded-xl transition-all shadow-md ${
+                    isStreaming
+                      ? 'bg-red-600 hover:bg-red-500 text-white'
+                      : inputPrompt.trim()
+                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105'
+                      : 'bg-[rgba(255,255,255,0.05)] text-gray-500 cursor-not-allowed'
+                  }`}
                 >
-                  {loading ? (
-                    <span className="loader-dot">&#9679;</span>
-                  ) : (
-                    <span>Inspect &rarr;</span>
-                  )}
+                  {isStreaming ? <StopIcon className="w-4 h-4" /> : <SendIcon className="w-4 h-4" />}
                 </button>
               </div>
             </div>
+
+            <div className="text-center text-[11px] text-gray-500 mt-2">
+              ChatGPT Pro may produce inaccurate information. Powered by Hosted LLM Inference endpoints.
+            </div>
           </div>
-        </main>
-      </div>
+        </div>
+      </main>
+
+      {/* Modals */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={(tok, usr) => {
+          setToken(tok);
+          setUser(usr);
+          loadChats();
+        }}
+        apiUrl={API_BASE_URL}
+      />
+
+      <DocumentManagerModal
+        isOpen={isDocsOpen}
+        onClose={() => setIsDocsOpen(false)}
+        token={token}
+        apiUrl={API_BASE_URL}
+        onDocumentsUpdated={loadDocCount}
+      />
+
+      <ProfileSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        user={user}
+        token={token}
+        apiUrl={API_BASE_URL}
+        onUserUpdated={(u) => setUser(u)}
+        onClearAllChats={handleClearAllChats}
+        onAccountDeleted={() => {
+          localStorage.clear();
+          setToken(null);
+          setUser(null);
+          setChats([]);
+          setMessages([]);
+          setIsSettingsOpen(false);
+          setIsAuthOpen(true);
+        }}
+      />
     </div>
   );
 }

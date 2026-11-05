@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "LLM X-Ray",
-  description: "Interactive Visualization of LLM Inference",
+  title: "ChatGPT Pro - Hosted Multi-User AI Platform",
+  description: "Next.js + FastAPI + PostgreSQL ChatGPT-Style Platform with RAG and Hosted LLM Inference",
 };
 
 export default function RootLayout({
@@ -23,8 +12,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}</body>
+    <html lang="en">
+      <body className="antialiased">{children}</body>
     </html>
   );
 }

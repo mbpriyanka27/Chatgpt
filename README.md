@@ -1,95 +1,164 @@
-# LocalGPT Pro — Secure, Multi-User Local AI Assistant with Firebase Authentication and Advanced UI
+# ChatGPT Pro — Enterprise Multi-User AI Platform (Project Phase 3)
 
-> **Project Phase 3 Upgrade**  
-> Turns LocalGPT into a secure, multi-user product: every user signs in with Google or Email through Firebase Authentication, enjoys strict data isolation across personal workspaces (private chats, private documents, and private FAISS vector indices), and interacts with a redesigned ChatGPT-style interface with LLM X-Ray inspection.
+A high-performance, full-stack **ChatGPT-style AI web application** built with a **Next.js + React + TypeScript** frontend, a **FastAPI** Python backend, and support for **PostgreSQL** (with zero-configuration SQLite fallback) and **Hosted LLM Endpoints**.
 
----
-
-## 🌟 What's New in Phase 3 (LocalGPT Pro)
-
-| Feature | Phase 2 (LocalGPT) | Phase 3 (LocalGPT Pro) |
-| :--- | :--- | :--- |
-| **Authentication** | No login | Google Sign-In + Email/Password via Firebase |
-| **User Space** | Single shared user | Multiple isolated users, each with private workspaces |
-| **Data Isolation** | Shared database rows | Every chat, message, document, and FAISS index keyed by verified `uid` |
-| **UI Design** | Default Streamlit look | Custom theme, dark/light mode tokens, avatars, styled bubbles |
-| **Chat Management** | Simple list | Search (`Ctrl+K`), Pinned chats, Date groups (Today, Yesterday, 7 Days) |
-| **Document System** | Basic sidebar uploader | Dedicated Document Manager, drag-and-drop progress, per-chat RAG toggle |
-| **X-Ray Panel** | Separate full-page tabs | Collapsible inline drawer next to/below each response |
-| **Settings** | Global settings | Per-user saved hyperparameters and default system prompts |
-| **Chat Export** | None | Export conversations as formatted Markdown (`.md`) and styled PDF (`.pdf`) |
-| **Security Layer** | Open | Protected routes (`require_login()`), verified JWT tokens, strict file isolation |
+Users can access the application through the web without installing local PyTorch models or requiring a dedicated GPU.
 
 ---
 
-## 🏗️ Architecture & Technology Stack
+## 🌟 Key Features
+
+### 1. Modern ChatGPT-Style Interface (No Streamlit)
+- **Authentic ChatGPT UI**: Dark/Light executive theme, responsive mobile drawer, smooth transitions, and keyboard shortcuts (`Ctrl+Shift+O` for new chat, `Ctrl+K` for search).
+- **Welcome Screen**: Dynamic greeting (`Good morning/afternoon/evening, <name>`) with 4 interactive starter prompt cards.
+- **Rich Message Presentation**:
+  - Full Markdown rendering (headings, tables, blockquotes, bullet & numbered lists).
+  - Code syntax highlighting with language badges and one-click **Copy code** button.
+  - Streaming cursor animation (`▍`) and real-time token rendering.
+  - Interactive toolbar: **Copy**, **Regenerate**, **Edit prompt**, and **Thumbs Up / Down** feedback.
+  - **Stop Generating** control (`■ Stop generating`) during active streaming.
+
+### 2. Hosted LLM Inference Service
+- **Deployable & GPU-Free**: Runs against any high-throughput OpenAI-compatible hosted API endpoint:
+  - **Groq** (`llama-3.3-70b-versatile`)
+  - **OpenAI** (`gpt-4o-mini`, `gpt-4o`)
+  - **OpenRouter / Hugging Face Serverless** (`qwen/qwen-2.5-72b-instruct`)
+- **Server-Sent Events (SSE)**: True token-by-token streaming via FastAPI `StreamingResponse`.
+- **Zero-Setup Cloud Demo Mode**: Includes an intelligent built-in cloud assistant fallback if no API key is entered immediately.
+
+### 3. Multi-User Authentication & Security
+- **Email + Password Signup & Login**: Secure password hashing with PBKDF2 HMAC-SHA256 and unique cryptographic salts.
+- **Google Sign-In**: Instant OAuth onboarding.
+- **Session Management**: Cryptographically signed JWT Bearer tokens with 7-day expiration.
+- **Forgot Password**: Password reset request and token verification workflow.
+- **One-Click Demo Accounts**: Pre-seeded `alice@example.com` and `bob@example.com` (`password123`) for immediate testing of data isolation.
+
+### 4. Persistent Conversations & Multi-Turn Memory
+- **Full History**: Chats are saved with auto-generated titles from initial questions.
+- **Date Grouping**: Organizes conversations into *Pinned*, *Today*, *Yesterday*, *Previous 7 Days*, and *Older*.
+- **Chat Actions**: Pin, inline rename, delete conversation, or clear all history.
+- **Conversation Memory**: Feeds previous conversational turns into prompt context.
+
+### 5. Document Management & RAG Grounding
+- **Supported Formats**: `.pdf`, `.docx`, `.txt`, `.csv`, `.json` (up to 25 MB).
+- **Chunking & Page Tracking**: Overlapping semantic segmentation preserving exact source page numbers.
+- **Per-User Isolation**: Each user gets a dedicated document store and vector index (`data/users/<uid>/`).
+- **Citation Chips**: Grounded answers display interactive chips (`📄 paper.pdf · p.4`) that expand to reveal the underlying source excerpt.
+- **Toggle Control**: "Search my documents" checkbox per query.
+
+### 6. Export Capabilities
+- Export any conversation directly to **Markdown (`.md`)**, **PDF**, or **JSON**.
+
+---
+
+## 🏗️ Architecture
 
 ```
-LocalGPT-Pro/
-├── app.py                     # Entry point & router (protected routes)
+LLM-XRay/
+├── backend/
+│   ├── main.py              # FastAPI application & REST/SSE endpoints
+│   ├── database.py          # SQLAlchemy PostgreSQL & SQLite models
+│   ├── auth.py              # JWT authentication & PBKDF2 password hashing
+│   ├── llm_client.py        # Hosted LLM streaming client (Groq, OpenAI, etc.)
+│   ├── rag_service.py       # Document parsing, chunking & semantic search
+│   ├── test_phase3.py       # Automated validation suite (6/6 tests)
+│   ├── requirements.txt     # Backend dependencies
+│   └── Dockerfile           # Backend container build
 │
-├── auth/                      # Firebase & Authentication Layer
-│   ├── firebase_config.py     # Loads config from .env
-│   ├── firebase_admin_init.py # Initializes Firebase Admin SDK & verifies tokens
-│   ├── auth_component.html    # Firebase JS SDK (Google Popup, Email forms)
-│   ├── auth.py                # Session handling, token processing, logout
-│   └── guards.py              # require_login() route guard
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx   # Root layout & metadata
+│   │   │   ├── page.tsx     # Main ChatGPT interface
+│   │   │   └── globals.css  # Dark theme styles & design tokens
+│   │   └── components/
+│   │       ├── Sidebar.tsx  # Chat list, search, pinning, user menu
+│   │       ├── AuthModal.tsx # Login / Signup / Google OAuth / Demo accounts
+│   │       ├── DocumentManagerModal.tsx # Drag-and-drop RAG upload
+│   │       ├── ProfileSettingsModal.tsx # Inference settings & user profile
+│   │       ├── MarkdownRenderer.tsx     # Markdown & syntax code blocks
+│   │       └── Icons.tsx    # Lightweight inline SVG icon library
+│   ├── package.json
+│   └── Dockerfile           # Next.js production container build
 │
-├── pages/                     # Application Screens
-│   ├── login.py               # Custom branded login, signup & forgot password
-│   ├── workspace.py           # Main chat canvas with streaming & message controls
-│   ├── documents.py           # Drag-and-drop document manager & FAISS indexing
-│   └── profile.py             # User profile, custom system prompts & danger zone
-│
-├── ui/                        # Presentation Components
-│   ├── theme.py               # Dark/Light theme design tokens
-│   ├── components.py          # Welcome screen, source chips, inline X-Ray drawer
-│   └── sidebar.py             # Search, pinned chats, date groups, user menu
-│
-├── assets/                    # Styling Assets
-│   ├── style.css              # Custom styling, fonts, cards, animations
-│   └── logo.svg               # Vector brand logo
-│
-├── model.py, tokenizer.py, chat.py, memory.py
-├── document_loader.py, embeddings.py, vector_store.py, rag.py
-├── xray.py, visualization.py
-├── database.py                # SQLite schema with users, chats, messages, documents, settings
-├── export.py                  # Markdown and ReportLab PDF exporter
-├── requirements.txt           # Dependencies
-└── data/
-    └── users/
-        └── <uid>/             # Isolated user directory
-            ├── documents/     # Private raw documents
-            ├── faiss_index/   # Private FAISS vector indices
-            └── exports/       # Private chat exports
+├── docker-compose.yml       # 1-click Docker orchestration (Postgres + Backend + Frontend)
+├── .env.example             # Template for hosted API keys & database URLs
+├── start_chatgpt.bat        # Windows one-click desktop launcher
+└── README.md
 ```
 
 ---
 
-## 🔑 Firebase Setup Instructions
+## 🚀 Quickstart Guide
 
-1. Go to the [Firebase Console](https://console.firebase.google.com/) and create a project named `localgpt-pro`.
-2. Navigate to **Authentication → Sign-in method** and enable:
-   - **Google**
-   - **Email/Password**
-3. Under **Authentication → Settings → Authorized domains**, ensure `localhost` is listed.
-4. Under **Project settings → General → Your apps**, add a Web app and copy your configuration into `.env`:
-   ```env
-   FIREBASE_API_KEY=your_api_key
-   FIREBASE_AUTH_DOMAIN=localgpt-pro.firebaseapp.com
-   FIREBASE_PROJECT_ID=localgpt-pro
-   FIREBASE_APP_ID=your_app_id
-   GOOGLE_APPLICATION_CREDENTIALS=serviceAccountKey.json
-   ```
-5. Under **Project settings → Service accounts**, click **Generate new private key** and save it as `serviceAccountKey.json` in the project root.
+### Option 1: Local Development (Fastest)
 
----
-
-## 🚀 Running the Application
-
+#### 1. Start the FastAPI Backend
 ```bash
-streamlit run app.py
+cd backend
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+- API is live at `http://localhost:8000`
+- Interactive Swagger docs at `http://localhost:8000/docs`
+
+#### 2. Start the Next.js Frontend
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Application is live at `http://localhost:3000`
+
+Or simply double-click `start_chatgpt.bat` on Windows.
+
+---
+
+### Option 2: Docker Compose (Production / Cloud)
+
+Run all services including PostgreSQL with a single command:
+```bash
+docker-compose up --build
+```
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- PostgreSQL: `localhost:5432`
+
+---
+
+## ⚙️ Environment Variables (`.env`)
+
+```ini
+# PostgreSQL Database (e.g., Supabase, Neon, Render, Railway)
+# Leave empty or omit to automatically use local SQLite (chatgpt.db)
+DATABASE_URL=postgresql://chatgpt_user:chatgpt_password_2026@localhost:5432/chatgpt_db
+
+# Security
+JWT_SECRET_KEY=super-secret-chatgpt-jwt-key-2026
+
+# Hosted LLM Inference Service (OpenAI-compatible)
+LLM_API_KEY=gsk_your_groq_api_key_or_openai_key
+LLM_BASE_URL=https://api.groq.com/openai/v1
+LLM_MODEL=llama-3.3-70b-versatile
+
+# Frontend API URL
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-The application is accessible at:
-👉 **http://localhost:8501**
+---
+
+## 🧪 Automated Test Suite
+
+Run the full end-to-end verification suite:
+```bash
+cd backend
+python test_phase3.py
+```
+
+Validates:
+1. Database initialization and demo account seeding (`Alice` & `Bob`).
+2. PBKDF2 HMAC-SHA256 password hashing & JWT token verification.
+3. Multi-turn conversation persistence.
+4. RAG document chunking and semantic query search.
+5. Strict multi-user data isolation (User B cannot access User A's index).
+6. Hosted LLM Server-Sent Events streaming token generator.
