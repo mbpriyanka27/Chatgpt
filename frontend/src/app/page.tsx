@@ -953,6 +953,15 @@ export default function ChatGPTApp() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
+                  {/* Voice Mode Big Circle Trigger */}
+                  <button
+                    onClick={() => setIsVoiceModalOpen(true)}
+                    title="Open ChatGPT Voice Mode (Interactive Fluid Circle)"
+                    className="p-2 rounded-xl transition-all shadow-md bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white hover:scale-105"
+                  >
+                    <HeadphoneIcon className="w-4 h-4" />
+                  </button>
+
                   {/* Microphone Voice Dictation Button */}
                   <button
                     onClick={handleToggleMic}
@@ -1003,6 +1012,20 @@ export default function ChatGPTApp() {
         token={token}
         chatId={activeChatId}
         selectedModel={selectedModel}
+        onBackgroundMessage={(userText, asstText, isFinished) => {
+          setMessages((prev) => {
+            const filtered = prev.filter((m) => !m.id.startsWith('voice-live-'));
+            return [
+              ...filtered,
+              { id: 'voice-live-u', role: 'user', content: userText },
+              { id: 'voice-live-a', role: 'assistant', content: asstText }
+            ];
+          });
+          if (isFinished) {
+            loadChats();
+            if (activeChatId) loadChatMessages(activeChatId);
+          }
+        }}
       />
 
       {/* Modals */}

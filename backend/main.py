@@ -493,7 +493,7 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
         # Initial metadata event: chat_id, message_id, sources
         yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': sources})}\n\n"
         
-        voice_token_limit = 70 if req.is_voice_mode else (req.max_tokens or 1024)
+        voice_token_limit = 35 if req.is_voice_mode else (req.max_tokens or 1024)
         async for chunk in stream_hosted_llm(
             messages=llm_messages,
             temperature=req.temperature or user.temperature or 0.7,
