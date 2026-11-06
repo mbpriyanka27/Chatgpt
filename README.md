@@ -18,7 +18,28 @@ Users can access the application through the web without installing local PyTorc
   - Interactive toolbar: **Copy**, **Regenerate**, **Edit prompt**, and **Thumbs Up / Down** feedback.
   - **Stop Generating** control (`■ Stop generating`) during active streaming.
 
-### 2. Hosted LLM Inference Service
+### 2. AI Image Generation Engine
+- **Conversational & One-Click Generation**:
+  - Automatically detects natural language image requests (e.g., `"draw a cute red panda wearing glasses"`, `"/image cybernetic metropolis at sunset"`).
+  - Dedicated **🎨 Image** tool button in the prompt toolbar.
+  - Powered by high-fidelity **Flux / SDXL** generation engine with optional **OpenAI DALL-E 3** support.
+- **Interactive Image Cards**:
+  - Full inline preview with shimmer loading state.
+  - One-click **Save / Download** button.
+  - Click to open a full-resolution **Lightbox Zoom Modal**.
+  - Local disk caching under `/media/images/<user_id>/` for permanent offline access.
+
+### 3. Real-Time Audio Chatting & Voice Mode
+- **Two-Way ChatGPT Voice Mode**:
+  - Dedicated **🎙️ Voice Mode** with central animated pulsating sound wave orb and real-time audio state indicator (`Listening...`, `Thinking...`, `Speaking...`).
+  - Hands-free natural conversational loop: user speaks -> automatically transcribes -> streams answer -> speaks back response out loud -> listens for next turn.
+- **Speech-to-Text Microphone Dictation**:
+  - In-line microphone button with pulsing red audio ring for real-time speech transcription into prompt box.
+- **Text-to-Speech (Audio Voice Output)**:
+  - Speaker icon (**🔊**) on every assistant response for instant read-aloud audio with pause/resume controls.
+  - **🔊 Audio Auto-Speak** toggle in the top bar to automatically vocalize all incoming AI responses.
+
+### 4. Hosted LLM Inference Service
 - **Deployable & GPU-Free**: Runs against any high-throughput OpenAI-compatible hosted API endpoint:
   - **Groq** (`llama-3.3-70b-versatile`)
   - **OpenAI** (`gpt-4o-mini`, `gpt-4o`)

@@ -4,13 +4,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   SparklesIcon, SendIcon, StopIcon, PaperclipIcon,
   CopyIcon, RegenerateIcon, ThumbsUpIcon, ThumbsDownIcon,
-  DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon
+  DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon,
+  MicIcon, MicOffIcon, SpeakerIcon, ImageIcon, HeadphoneIcon
 } from '../components/Icons';
 import { Sidebar, ChatItem } from '../components/Sidebar';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
 import { AuthModal } from '../components/AuthModal';
 import { DocumentManagerModal } from '../components/DocumentManagerModal';
 import { ProfileSettingsModal } from '../components/ProfileSettingsModal';
+import { VoiceChatModal } from '../components/VoiceChatModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -34,6 +36,13 @@ export default function ChatGPTApp() {
   const [useRag, setUseRag] = useState(false);
   const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
   const [docCount, setDocCount] = useState(0);
+
+  // Audio, Voice & Media States
+  const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
+  const [isListeningMic, setIsListeningMic] = useState(false);
+  const [speakingMsgId, setSpeakingMsgId] = useState<string | null>(null);
+  const [autoSpeakEnabled, setAutoSpeakEnabled] = useState(false);
+  const speechRecognitionRef = useRef<any>(null);
 
   // Modals & Drawers
   const [isAuthOpen, setIsAuthOpen] = useState(false);
@@ -380,6 +389,152 @@ export default function ChatGPTApp() {
     }
   };
 
+  const handleToggleSpeak = (msgId: string, text: string) => {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+      alert('Text-to-speech audio is not supported in this browser environment.');
+      return;
+    }
+
+    if (speakingMsgId === msgId) {
+      window.speechSynthesis.cancel();
+      setSpeakingMsgId(null);
+      return;
+    }
+
+    window.speechSynthesis.cancel();
+    setSpeakingMsgId(msgId);
+
+    const cleanText = text
+      .replace(/\*\*|__|\*|_|`|```[\s\S]*?```/g, '')
+      .replace(/#+\s+/g, '')
+      .replace(/!\[.*?\]\(.*?\)/g, '')
+      .replace(/\[(.*?)\]\(.*?\)/g, '$1')
+      .trim();
+
+    const utterance = new SpeechSynthesisUtterance(cleanText);
+    utterance.rate = 1.05;
+
+    const voices = window.speechSynthesis.getVoices();
+    const naturalVoice = voices.find(
+      (v) => (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Jenny')) && v.lang.startsWith('en')
+    ) || voices.find((v) => v.lang.startsWith('en'));
+
+    if (naturalVoice) {
+      utterance.voice = naturalVoice;
+    }
+
+    utterance.onend = () => setSpeakingMsgId(null);
+    utterance.onerror = () => setSpeakingMsgId(null);
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const handleToggleMic = () => {
+    if (typeof window === 'undefined') return;
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      alert('Speech-to-text recognition is not supported in this browser. Please use Google Chrome or Microsoft Edge.');
+      return;
+    }
+
+    if (isListeningMic) {
+      if (speechRecognitionRef.current) {
+        speechRecognitionRef.current.stop();
+      }
+      setIsListeningMic(false);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = false;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => setIsListeningMic(true);
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript) {
+          setInputPrompt((prev) => (prev ? prev + ' ' + transcript : transcript));
+        }
+      };
+
+      recognition.onerror = () => setIsListeningMic(false);
+      recognition.onend = () => setIsListeningMic(false);
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+    } catch (e) {
+      console.warn('Speech recognition error:', e);
+      setIsListeningMic(false);
+    }
+  };
+
+  const handleInsertImagePrompt = () => {
+    if (!inputPrompt.startsWith('/image')) {
+      setInputPrompt('/image ');
+    }
+    textareaRef.current?.focus();
+  };
+
+  const handleVoiceModalSend = async (voiceQuery: string): Promise<string> => {
+    return new Promise(async (resolve, reject) => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            chat_id: activeChatId,
+            prompt: voiceQuery,
+            use_rag: useRag,
+            model: selectedModel,
+            temperature: user?.temperature || 0.7,
+            api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
+          })
+        });
+
+        if (!response.ok) throw new Error('Inference error');
+
+        const reader = response.body?.getReader();
+        const decoder = new TextDecoder();
+        let completeText = '';
+
+        if (reader) {
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            const chunkText = decoder.decode(value, { stream: true });
+            const lines = chunkText.split('\n');
+            for (const line of lines) {
+              if (line.startsWith('data: ')) {
+                try {
+                  const payload = JSON.parse(line.slice(6));
+                  if (payload.event === 'chunk') {
+                    completeText += payload.text;
+                  }
+                } catch (e) {}
+              }
+            }
+          }
+        }
+        if (activeChatId) loadChatMessages(activeChatId);
+        resolve(completeText || 'I processed your request.');
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
   const starterPromptCards = [
     {
       title: 'Explain Quantum Computing',
@@ -476,6 +631,37 @@ export default function ChatGPTApp() {
 
           {/* Top Right Actions */}
           <div className="flex items-center gap-2">
+            {/* ChatGPT Voice Mode Button */}
+            <button
+              onClick={() => setIsVoiceModalOpen(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-md shadow-emerald-900/30 transition-all hover:scale-105"
+              title="Start hands-free two-way Voice Chat"
+            >
+              <HeadphoneIcon className="w-3.5 h-3.5" />
+              <span>Voice Mode</span>
+            </button>
+
+            {/* Auto-Speak Toggle */}
+            <button
+              onClick={() => {
+                const next = !autoSpeakEnabled;
+                setAutoSpeakEnabled(next);
+                if (!next && typeof window !== 'undefined') {
+                  window.speechSynthesis?.cancel();
+                  setSpeakingMsgId(null);
+                }
+              }}
+              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
+                autoSpeakEnabled
+                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
+                  : 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.08)] text-gray-400 hover:text-white'
+              }`}
+              title={autoSpeakEnabled ? 'Auto-Speak is ON: AI answers will be read aloud' : 'Enable Auto-Speak voice audio'}
+            >
+              <SpeakerIcon className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Audio: {autoSpeakEnabled ? 'On' : 'Off'}</span>
+            </button>
+
             {activeChatId && (
               <div className="flex items-center gap-1">
                 <button
@@ -628,6 +814,23 @@ export default function ChatGPTApp() {
 
                       {!isUser && (
                         <>
+                          {/* Audio Voice Response / Read Aloud */}
+                          <button
+                            onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] transition-colors ${
+                              speakingMsgId === msg.id
+                                ? 'text-cyan-400 bg-cyan-950/40 animate-pulse'
+                                : 'hover:text-white'
+                            }`}
+                            title={speakingMsgId === msg.id ? 'Stop audio playback' : 'Read aloud (Audio response)'}
+                          >
+                            {speakingMsgId === msg.id ? (
+                              <StopIcon className="w-3.5 h-3.5" />
+                            ) : (
+                              <SpeakerIcon className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+
                           <button
                             onClick={() => {
                               // Find preceding user prompt
@@ -728,6 +931,16 @@ export default function ChatGPTApp() {
                     <span className="hidden sm:inline">Attach file</span>
                   </button>
 
+                  {/* AI Image Generation Trigger Button */}
+                  <button
+                    onClick={handleInsertImagePrompt}
+                    title="Generate an AI Image (/image ...)"
+                    className="p-1.5 rounded-lg text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 transition-colors flex items-center gap-1.5 text-xs font-medium"
+                  >
+                    <ImageIcon className="w-4 h-4" />
+                    <span className="hidden sm:inline">Image</span>
+                  </button>
+
                   <label className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none">
                     <input
                       type="checkbox"
@@ -739,29 +952,51 @@ export default function ChatGPTApp() {
                   </label>
                 </div>
 
-                {/* Send / Stop Action */}
-                <button
-                  onClick={() => (isStreaming ? handleStopGenerating() : handleSendMessage())}
-                  disabled={!inputPrompt.trim() && !isStreaming}
-                  className={`p-2 rounded-xl transition-all shadow-md ${
-                    isStreaming
-                      ? 'bg-red-600 hover:bg-red-500 text-white'
-                      : inputPrompt.trim()
-                      ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105'
-                      : 'bg-[rgba(255,255,255,0.05)] text-gray-500 cursor-not-allowed'
-                  }`}
-                >
-                  {isStreaming ? <StopIcon className="w-4 h-4" /> : <SendIcon className="w-4 h-4" />}
-                </button>
+                <div className="flex items-center gap-1.5">
+                  {/* Microphone Voice Dictation Button */}
+                  <button
+                    onClick={handleToggleMic}
+                    title={isListeningMic ? 'Stop voice listening' : 'Voice Input (Speak your prompt)'}
+                    className={`p-2 rounded-xl transition-all shadow-md ${
+                      isListeningMic
+                        ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400 scale-105'
+                        : 'bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.12)] text-gray-300 hover:text-white'
+                    }`}
+                  >
+                    {isListeningMic ? <MicOffIcon className="w-4 h-4" /> : <MicIcon className="w-4 h-4" />}
+                  </button>
+
+                  {/* Send / Stop Action */}
+                  <button
+                    onClick={() => (isStreaming ? handleStopGenerating() : handleSendMessage())}
+                    disabled={!inputPrompt.trim() && !isStreaming}
+                    className={`p-2 rounded-xl transition-all shadow-md ${
+                      isStreaming
+                        ? 'bg-red-600 hover:bg-red-500 text-white'
+                        : inputPrompt.trim()
+                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105'
+                        : 'bg-[rgba(255,255,255,0.05)] text-gray-500 cursor-not-allowed'
+                    }`}
+                  >
+                    {isStreaming ? <StopIcon className="w-4 h-4" /> : <SendIcon className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="text-center text-[11px] text-gray-500 mt-2">
-              ChatGPT Pro may produce inaccurate information. Powered by Hosted LLM Inference endpoints.
+              ChatGPT Pro with AI Image Generation & Real-Time Voice Audio. Powered by Hosted LLMs.
             </div>
           </div>
         </div>
       </main>
+
+      {/* Two-Way ChatGPT Voice Mode Modal */}
+      <VoiceChatModal
+        isOpen={isVoiceModalOpen}
+        onClose={() => setIsVoiceModalOpen(false)}
+        onSendMessage={handleVoiceModalSend}
+      />
 
       {/* Modals */}
       <AuthModal

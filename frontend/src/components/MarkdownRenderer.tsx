@@ -34,6 +34,100 @@ function CodeBlock({ language, code }: CodeBlockProps) {
   );
 }
 
+function ImageCard({ src, alt }: { src: string; alt: string }) {
+  const [isZoomed, setIsZoomed] = useState(false);
+  const [loaded, setLoaded] = useState(false);
+
+  // If local media path and no host, prepend backend URL if needed
+  const effectiveSrc = src.startsWith('/media')
+    ? (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000') + src
+    : src;
+
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const a = document.createElement('a');
+    a.href = effectiveSrc;
+    a.download = `${alt || 'chatgpt-generated-image'}.jpg`;
+    a.target = '_blank';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
+  return (
+    <>
+      <div className="my-3 relative group rounded-2xl overflow-hidden border border-[rgba(255,255,255,0.15)] bg-[#12121e] max-w-lg shadow-xl cursor-pointer">
+        {!loaded && (
+          <div className="w-full h-64 bg-[#1f1f30] animate-pulse flex items-center justify-center text-xs text-gray-400">
+            <span>🎨 Loading generated image...</span>
+          </div>
+        )}
+        <img
+          src={effectiveSrc}
+          alt={alt}
+          onLoad={() => setLoaded(true)}
+          onClick={() => setIsZoomed(true)}
+          className={`w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02] ${
+            loaded ? 'block' : 'hidden'
+          }`}
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
+          <span className="text-xs text-white/90 font-medium truncate max-w-[70%]">{alt}</span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleDownload}
+              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md transition-colors flex items-center gap-1"
+              title="Download image"
+            >
+              ⬇️ Save
+            </button>
+            <button
+              onClick={() => setIsZoomed(true)}
+              className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-medium backdrop-blur-sm transition-colors"
+              title="Full preview"
+            >
+              🔍 View
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Lightbox Modal */}
+      {isZoomed && (
+        <div
+          className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 cursor-pointer"
+          onClick={() => setIsZoomed(false)}
+        >
+          <div className="relative max-w-4xl max-h-[90vh] flex flex-col items-center" onClick={(e) => e.stopPropagation()}>
+            <img
+              src={effectiveSrc}
+              alt={alt}
+              className="max-w-full max-h-[80vh] rounded-xl object-contain shadow-2xl border border-[rgba(255,255,255,0.2)]"
+            />
+            <div className="mt-3 flex items-center justify-between w-full text-sm text-gray-200">
+              <span className="truncate mr-4 text-xs font-mono">{alt}</span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleDownload}
+                  className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow transition-colors"
+                >
+                  Download Full Image
+                </button>
+                <button
+                  onClick={() => setIsZoomed(false)}
+                  className="px-3 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-medium transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function MarkdownRenderer({ content }: { content: string }) {
   if (!content) return null;
 
@@ -71,6 +165,12 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
     <>
       {lines.map((line, idx) => {
         const trimmed = line.trim();
+
+        // Markdown Image: ![alt](url)
+        const imgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+        if (imgMatch) {
+          return <ImageCard key={idx} alt={imgMatch[1]} src={imgMatch[2]} />;
+        }
 
         // Heading 3
         if (trimmed.startsWith('### ')) {
@@ -138,11 +238,17 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
 }
 
 function formatInlineStyles(text: string): React.ReactNode[] {
-  // Matches inline code `...`, bold **...**, italics *...*
-  const tokenRegex = /(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
+  // Matches markdown images inside paragraph ![alt](url), inline code `...`, bold **...**, italics *...*
+  const tokenRegex = /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g;
   const parts = text.split(tokenRegex);
 
   return parts.map((part, i) => {
+    if (part.startsWith('![') && part.includes('](') && part.endsWith(')')) {
+      const match = part.match(/!\[(.*?)\]\((.*?)\)/);
+      if (match) {
+        return <ImageCard key={i} alt={match[1]} src={match[2]} />;
+      }
+    }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
         <code key={i} className="px-1.5 py-0.5 bg-[rgba(255,255,255,0.1)] rounded font-mono text-xs text-emerald-300">

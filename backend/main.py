@@ -17,10 +17,13 @@ from auth import (
 )
 from llm_client import stream_hosted_llm, preload_model
 from rag_service import UserVectorStore
+from media_service import detect_image_prompt, generate_image, transcribe_audio_file
+from fastapi.staticfiles import StaticFiles
+from pathlib import Path
 
 app = FastAPI(
     title="ChatGPT Enterprise Platform API",
-    description="Production-ready FastAPI backend with hosted LLM inference, RAG, and PostgreSQL/SQLite support",
+    description="Production-ready FastAPI backend with hosted LLM inference, Image Generation, Audio Chatting, RAG, and PostgreSQL/SQLite support",
     version="3.0.0"
 )
 
@@ -31,6 +34,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount media directory for generated images and user audio
+media_path = Path("data/media")
+media_path.mkdir(parents=True, exist_ok=True)
+app.mount("/media", StaticFiles(directory=str(media_path)), name="media")
 
 @app.on_event("startup")
 def on_startup():
@@ -88,6 +96,15 @@ class ChatStreamRequest(BaseModel):
     model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = 1024
+    api_key: Optional[str] = None
+    is_image_request: Optional[bool] = False
+
+class ImageGenerateRequest(BaseModel):
+    prompt: str
+    chat_id: Optional[str] = None
+    model: Optional[str] = "flux"
+    width: Optional[int] = 1024
+    height: Optional[int] = 1024
     api_key: Optional[str] = None
 
 class FeedbackRequest(BaseModel):
@@ -423,8 +440,49 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     for m in history_messages[-10:]:  # Last 10 turns for token budget
         llm_messages.append({"role": m.role, "content": m.content})
 
-    # 5. Stream response generator
+    # 5. Stream response generator (Text or Image)
     assistant_msg_id = str(uuid.uuid4())
+    img_prompt = req.prompt if req.is_image_request else detect_image_prompt(req.prompt)
+
+    if img_prompt:
+        async def sse_image_generator():
+            yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': []})}\n\n"
+            notice = f"🎨 Generating your requested AI image for: **\"{img_prompt}\"**...\n\n"
+            yield f"data: {json.dumps({'event': 'chunk', 'text': notice})}\n\n"
+
+            try:
+                img_res = await generate_image(
+                    prompt=img_prompt,
+                    user_id=user.id,
+                    model=req.model or "flux",
+                    api_key=req.api_key or ""
+                )
+                img_markdown = f"![{img_prompt}]({img_res['url']})\n\n**Generated Image**: *{img_prompt}*\n\n*(Model: {img_res['model'].upper()} • Click to view full size)*"
+                yield f"data: {json.dumps({'event': 'chunk', 'text': img_markdown})}\n\n"
+                full_content = notice + img_markdown
+            except Exception as e:
+                err_text = f"⚠️ Image generation failed: {str(e)}"
+                yield f"data: {json.dumps({'event': 'chunk', 'text': err_text})}\n\n"
+                full_content = notice + err_text
+
+            db_session = SessionLocal()
+            try:
+                asst_msg = Message(
+                    id=assistant_msg_id,
+                    chat_id=chat.id,
+                    role="assistant",
+                    content=full_content,
+                    sources_json="[]",
+                    tokens=len(full_content.split())
+                )
+                db_session.add(asst_msg)
+                db_session.commit()
+            finally:
+                db_session.close()
+
+            yield f"data: {json.dumps({'event': 'end', 'full_text': full_content})}\n\n"
+
+        return StreamingResponse(sse_image_generator(), media_type="text/event-stream")
     
     async def sse_event_generator():
         collected_chunks = []
@@ -461,6 +519,36 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
         yield f"data: {json.dumps({'event': 'end', 'full_text': full_content})}\n\n"
 
     return StreamingResponse(sse_event_generator(), media_type="text/event-stream")
+
+
+@app.post("/api/image/generate")
+async def generate_image_endpoint(
+    req: ImageGenerateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
+    """Direct API endpoint for image generation."""
+    img_res = await generate_image(
+        prompt=req.prompt,
+        user_id=user.id,
+        width=req.width or 1024,
+        height=req.height or 1024,
+        model=req.model or "flux",
+        api_key=req.api_key or ""
+    )
+    return img_res
+
+
+@app.post("/api/audio/transcribe")
+async def transcribe_audio_endpoint(
+    file: UploadFile = File(...),
+    api_key: Optional[str] = Form(None),
+    user: User = Depends(get_current_user)
+):
+    """Audio transcription endpoint supporting voice chat and recorded audio."""
+    contents = await file.read()
+    transcription = await transcribe_audio_file(contents, file.filename or "recording.webm", api_key=api_key or "")
+    return {"text": transcription}
 
 
 @app.post("/api/messages/{message_id}/feedback")
