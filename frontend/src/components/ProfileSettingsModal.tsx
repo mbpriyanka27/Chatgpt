@@ -30,6 +30,12 @@ export function ProfileSettingsModal({
   );
   const [temperature, setTemperature] = useState(user?.temperature || 0.7);
   const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
+  const [apiKey, setApiKey] = useState(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('chatgpt_api_key') || '';
+    }
+    return '';
+  });
   const [saving, setSaving] = useState(false);
   const [statusMsg, setStatusMsg] = useState('');
 
@@ -39,6 +45,10 @@ export function ProfileSettingsModal({
     if (!token) return;
     setSaving(true);
     setStatusMsg('');
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatgpt_api_key', apiKey.trim());
+    }
 
     try {
       const res = await fetch(`${apiUrl}/api/auth/profile`, {
@@ -203,6 +213,22 @@ export function ProfileSettingsModal({
               </div>
 
               <div>
+                <label className="block text-gray-300 font-medium mb-1">
+                  Hosted LLM API Key (Groq / OpenAI / OpenRouter)
+                </label>
+                <input
+                  type="password"
+                  placeholder="gsk_... or sk-..."
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full bg-[#2a2b3d] border border-[rgba(255,255,255,0.1)] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500 font-mono"
+                />
+                <p className="text-[11px] text-gray-400 mt-1">
+                  🚀 Tip: Enter a free key from <a href="https://console.groq.com" target="_blank" rel="noreferrer" className="text-emerald-400 underline">console.groq.com</a> for 500 tokens/sec speed! Leave blank to use the warm in-memory model.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-gray-300 font-medium mb-1">System Instructions</label>
                 <textarea
                   rows={4}
@@ -281,3 +307,4 @@ export function ProfileSettingsModal({
     </div>
   );
 }
+

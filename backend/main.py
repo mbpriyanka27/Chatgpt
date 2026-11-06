@@ -15,7 +15,7 @@ from auth import (
     hash_password, verify_password, create_access_token, 
     get_current_user, seed_demo_users
 )
-from llm_client import stream_hosted_llm
+from llm_client import stream_hosted_llm, preload_model
 from rag_service import UserVectorStore
 
 app = FastAPI(
@@ -40,6 +40,9 @@ def on_startup():
         seed_demo_users(db)
     finally:
         db.close()
+    
+    # Preload inference engine into RAM at startup so first response is sub-second
+    preload_model()
 
 
 # ==========================================
@@ -85,6 +88,7 @@ class ChatStreamRequest(BaseModel):
     model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = 1024
+    api_key: Optional[str] = None
 
 class FeedbackRequest(BaseModel):
     feedback: str  # like, dislike, or empty
@@ -431,7 +435,8 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
             messages=llm_messages,
             temperature=req.temperature or user.temperature or 0.7,
             max_tokens=req.max_tokens or 1024,
-            model=req.model or ""
+            model=req.model or "",
+            api_key=req.api_key or ""
         ):
             collected_chunks.append(chunk)
             yield f"data: {json.dumps({'event': 'chunk', 'text': chunk})}\n\n"

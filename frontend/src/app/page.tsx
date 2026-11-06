@@ -256,7 +256,8 @@ export default function ChatGPTApp() {
           prompt: text,
           use_rag: useRag,
           model: selectedModel,
-          temperature: user?.temperature || 0.7
+          temperature: user?.temperature || 0.7,
+          api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
         signal: abortController.signal
       });
