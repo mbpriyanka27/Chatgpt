@@ -13,20 +13,21 @@ interface VoiceChatModalProps {
 
 const SUPPORTED_LANGUAGES = [
   { code: 'auto', name: '🌐 Auto-Detect Language' },
+  { code: 'kn-IN', name: '🇮🇳 ಕನ್ನಡ (Kannada)' },
   { code: 'en-US', name: '🇺🇸 English (US)' },
+  { code: 'hi-IN', name: '🇮🇳 हिन्दी (Hindi)' },
+  { code: 'te-IN', name: '🇮🇳 తెలుగు (Telugu)' },
+  { code: 'ta-IN', name: '🇮🇳 தமிழ் (Tamil)' },
   { code: 'es-ES', name: '🇪🇸 Español (Spanish)' },
   { code: 'fr-FR', name: '🇫🇷 Français (French)' },
   { code: 'de-DE', name: '🇩🇪 Deutsch (German)' },
-  { code: 'hi-IN', name: '🇮🇳 हिन्दी (Hindi)' },
   { code: 'ar-SA', name: '🇸🇦 العربية (Arabic)' },
   { code: 'zh-CN', name: '🇨🇳 中文 (Chinese)' },
   { code: 'ja-JP', name: '🇯🇵 日本語 (Japanese)' },
   { code: 'it-IT', name: '🇮🇹 Italiano (Italian)' },
   { code: 'pt-BR', name: '🇧🇷 Português (Portuguese)' },
   { code: 'ru-RU', name: '🇷🇺 Русский (Russian)' },
-  { code: 'ko-KR', name: '🇰🇷 한국어 (Korean)' },
-  { code: 'te-IN', name: '🇮🇳 తెలుగు (Telugu)' },
-  { code: 'ta-IN', name: '🇮🇳 தமிழ் (Tamil)' }
+  { code: 'ko-KR', name: '🇰🇷 한국어 (Korean)' }
 ];
 
 export function VoiceChatModal({
@@ -43,13 +44,18 @@ export function VoiceChatModal({
   const [aiSpokenText, setAiSpokenText] = useState('');
   const [selectedLang, setSelectedLang] = useState('auto');
   const [isMuted, setIsMuted] = useState(false);
+  const [turnCount, setTurnCount] = useState(1);
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
   const isClosingRef = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const isStreamingRef = useRef(false);
   const speechQueueCountRef = useRef(0);
   const detectedLangRef = useRef('en-US');
+  // Prevents Chrome from garbage-collecting utterances before onend fires!
+  const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const silenceTimerRef = useRef<any>(null);
 
   // Initialize SpeechSynthesis on mount
   useEffect(() => {
@@ -79,9 +85,10 @@ export function VoiceChatModal({
     isClosingRef.current = false;
     setUserTranscript('');
     setAiSpokenText('');
+    setTurnCount(1);
     speechQueueCountRef.current = 0;
+    activeUtterancesRef.current = [];
 
-    // Immediately start listening when voice modal opens (just like ChatGPT)
     const timer = setTimeout(() => {
       startListening();
     }, 250);
@@ -98,7 +105,7 @@ export function VoiceChatModal({
   }, [isOpen]);
 
   const startListening = () => {
-    if (typeof window === 'undefined') return;
+    if (typeof window === 'undefined' || isClosingRef.current || isMuted) return;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -116,7 +123,7 @@ export function VoiceChatModal({
       recognition.continuous = false;
       recognition.interimResults = true;
 
-      // Set language (supports all languages)
+      // Handle language selection (Kannada kn-IN, Hindi hi-IN, English, etc.)
       const targetLang =
         selectedLang !== 'auto'
           ? selectedLang
@@ -146,20 +153,35 @@ export function VoiceChatModal({
         const currentText = final || interim;
         setUserTranscript(currentText);
 
-        // When user finishes speaking sentence, trigger immediately
-        if (final && final.trim().length > 1) {
+        // Immediate silence detector: if final phrase received, trigger query without waiting
+        if (final && final.trim().length > 0) {
+          clearTimeout(silenceTimerRef.current);
           handleUserQuery(final.trim());
+        } else if (interim && interim.trim().length > 3) {
+          // If user pauses for 900ms, automatically trigger query for snappy real-time conversation
+          clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = setTimeout(() => {
+            if (currentText.trim().length > 0 && status === 'listening') {
+              handleUserQuery(currentText.trim());
+            }
+          }, 950);
         }
       };
 
       recognition.onerror = (event: any) => {
         if (event.error !== 'no-speech' && !isClosingRef.current) {
-          console.warn('Speech error:', event.error);
+          console.warn('Speech recognition error:', event.error);
+        }
+        if (event.error === 'no-speech' && status === 'listening' && !isClosingRef.current) {
+          // Auto restart listening if silent
+          try {
+            recognition.start();
+          } catch (e) {}
         }
       };
 
       recognition.onend = () => {
-        if (!isClosingRef.current && status === 'listening') {
+        if (!isClosingRef.current && status === 'listening' && !isStreamingRef.current) {
           try {
             recognition.start();
           } catch (e) {}
@@ -174,6 +196,7 @@ export function VoiceChatModal({
   };
 
   const stopListening = () => {
+    clearTimeout(silenceTimerRef.current);
     if (recognitionRef.current) {
       try {
         recognitionRef.current.abort();
@@ -187,15 +210,18 @@ export function VoiceChatModal({
       synthRef.current.cancel();
     }
     speechQueueCountRef.current = 0;
+    activeUtterancesRef.current = [];
   };
 
-  // Ultra-Fast Streaming Voice Response Handler
+  // Ultra-Fast Streaming Voice Handler
   const handleUserQuery = async (query: string) => {
+    clearTimeout(silenceTimerRef.current);
     stopListening();
     stopSpeaking();
     setStatus('thinking');
     setUserTranscript(query);
     setAiSpokenText('');
+    isStreamingRef.current = true;
 
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
@@ -212,13 +238,13 @@ export function VoiceChatModal({
           prompt: query,
           model: selectedModel,
           is_voice_mode: true,
-          max_tokens: 35, // 15-20 words for sub-second fraction response
+          max_tokens: 30, // Ultra short for < 300ms sub-second response
           api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
         signal: abortController.signal
       });
 
-      if (!response.ok) throw new Error('Voice stream failed');
+      if (!response.ok) throw new Error('Voice connection failed');
 
       const reader = response.body?.getReader();
       const decoder = new TextDecoder();
@@ -244,18 +270,17 @@ export function VoiceChatModal({
                   fullResponseAccumulated += tokenText;
                   setAiSpokenText(fullResponseAccumulated);
 
-                  // Update parent chat in the background
                   if (onBackgroundMessage) {
                     onBackgroundMessage(query, fullResponseAccumulated, false);
                   }
 
-                  // Fraction of second trigger: Speak as soon as first 4 words or punctuation arrives!
+                  // Fraction of second trigger: Speak as soon as first 3-4 words or punctuation arrives
                   const sentenceMatch = sentenceBuffer.match(/^([\s\S]*?[.!?\n,]+)\s*([\s\S]*)$/);
                   if (sentenceMatch) {
                     const chunkToSpeak = sentenceMatch[1].trim();
                     sentenceBuffer = sentenceMatch[2];
 
-                    if (chunkToSpeak.length > 2) {
+                    if (chunkToSpeak.length > 1) {
                       if (!hasStartedSpeaking) {
                         setStatus('speaking');
                         hasStartedSpeaking = true;
@@ -271,8 +296,8 @@ export function VoiceChatModal({
           }
         }
 
-        // Speak remaining buffer
-        if (sentenceBuffer.trim().length > 1) {
+        // Speak any remaining sentence buffer
+        if (sentenceBuffer.trim().length > 0) {
           if (!hasStartedSpeaking) {
             setStatus('speaking');
           }
@@ -282,12 +307,6 @@ export function VoiceChatModal({
         if (onBackgroundMessage) {
           onBackgroundMessage(query, fullResponseAccumulated, true);
         }
-
-        // If no speech queued, resume listening
-        if (speechQueueCountRef.current === 0 && !isClosingRef.current) {
-          setStatus('listening');
-          startListening();
-        }
       }
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -296,10 +315,27 @@ export function VoiceChatModal({
         setStatus('speaking');
         enqueueSpeech(errorText);
       }
+    } finally {
+      isStreamingRef.current = false;
+      // If nothing was queued to speak, immediately re-arm for question 2!
+      if (speechQueueCountRef.current === 0 && !isClosingRef.current) {
+        reArmForNextTurn();
+      }
     }
   };
 
-  // Speaks in ANY language with matched browser voices
+  // Re-arms listening for Question 2, Question 3, etc.
+  const reArmForNextTurn = () => {
+    if (isClosingRef.current || isMuted) return;
+    setTurnCount((prev) => prev + 1);
+    setStatus('listening');
+    setUserTranscript('');
+    setTimeout(() => {
+      startListening();
+    }, 200);
+  };
+
+  // Multilingual Speech Synthesis Engine
   const enqueueSpeech = (rawText: string) => {
     if (!synthRef.current || isClosingRef.current) return;
 
@@ -313,46 +349,51 @@ export function VoiceChatModal({
     if (!clean) return;
 
     const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.rate = 1.1; // Fast, snappy, natural pace
+    utterance.rate = 1.15; // Lively, snappy conversational pace
     utterance.pitch = 1.0;
 
     const voices = synthRef.current.getVoices();
     const currentLangCode = detectedLangRef.current.slice(0, 2).toLowerCase();
 
-    // Match voice for user's language (Spanish, Hindi, French, German, Chinese, English, etc.)
+    // Match voice for user's language (Kannada kn-IN, Hindi hi-IN, Spanish, etc.)
     const matchedVoice =
       voices.find(
         (v) =>
-          v.lang.toLowerCase().startsWith(currentLangCode) &&
+          (v.lang.toLowerCase().startsWith(currentLangCode) || v.lang.toLowerCase().includes(currentLangCode)) &&
           (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural'))
       ) ||
-      voices.find((v) => v.lang.toLowerCase().startsWith(currentLangCode)) ||
+      voices.find(
+        (v) =>
+          v.lang.toLowerCase().startsWith(currentLangCode) ||
+          v.lang.toLowerCase().includes(currentLangCode)
+      ) ||
       voices.find((v) => v.lang.startsWith('en')) ||
       voices[0];
 
     if (matchedVoice) {
       utterance.voice = matchedVoice;
       utterance.lang = matchedVoice.lang;
+    } else {
+      utterance.lang = detectedLangRef.current;
     }
 
     speechQueueCountRef.current += 1;
+    // CRITICAL: Retain utterance reference in array to stop Chrome GC bug!
+    activeUtterancesRef.current.push(utterance);
 
-    utterance.onend = () => {
+    const onUtteranceFinish = () => {
+      // Remove from retention ref
+      activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utterance);
       speechQueueCountRef.current = Math.max(0, speechQueueCountRef.current - 1);
-      if (speechQueueCountRef.current === 0 && !isClosingRef.current) {
-        setStatus('listening');
-        setUserTranscript('');
-        startListening();
+
+      // Only when stream is completely done and all speech chunks finished, trigger Question 2!
+      if (speechQueueCountRef.current === 0 && !isStreamingRef.current && !isClosingRef.current) {
+        reArmForNextTurn();
       }
     };
 
-    utterance.onerror = () => {
-      speechQueueCountRef.current = Math.max(0, speechQueueCountRef.current - 1);
-      if (speechQueueCountRef.current === 0 && !isClosingRef.current) {
-        setStatus('listening');
-        startListening();
-      }
-    };
+    utterance.onend = onUtteranceFinish;
+    utterance.onerror = onUtteranceFinish;
 
     synthRef.current.speak(utterance);
   };
@@ -361,10 +402,7 @@ export function VoiceChatModal({
     if (status === 'speaking' || status === 'thinking') {
       stopSpeaking();
       if (abortControllerRef.current) abortControllerRef.current.abort();
-      setStatus('listening');
-      setUserTranscript('');
-      setAiSpokenText('');
-      startListening();
+      reArmForNextTurn();
     } else if (status === 'listening') {
       toggleMute();
     }
@@ -409,13 +447,13 @@ export function VoiceChatModal({
           }
           50% {
             border-radius: 40% 60% 70% 30% / 50% 60% 30% 60%;
-            transform: scale(1.05) translateY(-6px);
+            transform: scale(1.06) translateY(-6px);
           }
         }
         @keyframes rippleRing {
-          0% { transform: scale(0.9); opacity: 0.7; }
-          50% { transform: scale(1.25); opacity: 0.25; }
-          100% { transform: scale(1.55); opacity: 0; }
+          0% { transform: scale(0.9); opacity: 0.75; }
+          50% { transform: scale(1.25); opacity: 0.28; }
+          100% { transform: scale(1.6); opacity: 0; }
         }
         @keyframes soundWaveBounce {
           0%, 100% { height: 12px; }
@@ -423,17 +461,17 @@ export function VoiceChatModal({
         }
         .fluid-orb-listening {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #34d399 28%, #059669 60%, #064e3b 100%);
-          box-shadow: 0 0 70px rgba(16, 185, 129, 0.55), inset 0 0 25px rgba(255, 255, 255, 0.4);
-          animation: orbMorph 5s ease-in-out infinite;
+          box-shadow: 0 0 75px rgba(16, 185, 129, 0.6), inset 0 0 25px rgba(255, 255, 255, 0.4);
+          animation: orbMorph 4.5s ease-in-out infinite;
         }
         .fluid-orb-thinking {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #c084fc 30%, #7c3aed 65%, #312e81 100%);
-          box-shadow: 0 0 75px rgba(168, 85, 247, 0.6), inset 0 0 25px rgba(255, 255, 255, 0.4);
+          box-shadow: 0 0 80px rgba(168, 85, 247, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
           animation: orbMorph 3s ease-in-out infinite;
         }
         .fluid-orb-speaking {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #38bdf8 25%, #2563eb 55%, #1e1b4b 100%);
-          box-shadow: 0 0 90px rgba(56, 189, 248, 0.7), inset 0 0 30px rgba(255, 255, 255, 0.5);
+          box-shadow: 0 0 95px rgba(56, 189, 248, 0.75), inset 0 0 30px rgba(255, 255, 255, 0.5);
           animation: orbMorph 3.5s ease-in-out infinite;
         }
         .fluid-orb-idle {
@@ -442,17 +480,17 @@ export function VoiceChatModal({
         }
       `}</style>
 
-      {/* Top Header: Model & Language Selector */}
+      {/* Top Header: Model & Language Selector (Kannada Included) */}
       <div style={{ width: '100%', maxWidth: '640px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
           <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af' }}>
-            ChatGPT Advanced Voice
+            ChatGPT Voice • Turn {turnCount}
           </span>
         </div>
 
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-          {/* Language Selector */}
+          {/* Language Selector (With Kannada) */}
           <select
             value={selectedLang}
             onChange={(e) => {
@@ -478,7 +516,7 @@ export function VoiceChatModal({
             ))}
           </select>
 
-          {/* Close / Exit Button */}
+          {/* Close Button */}
           <button
             onClick={() => {
               isClosingRef.current = true;
@@ -508,12 +546,12 @@ export function VoiceChatModal({
       {/* Center: The Iconic Large Fluid Morphing Circle */}
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', maxWidth: '500px', position: 'relative' }}>
         
-        {/* Container with click-to-interrupt */}
+        {/* Click to interrupt / talk */}
         <div
           onClick={handleInterruptOrTap}
-          style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '300px', height: '300px' }}
+          style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '310px', height: '310px' }}
         >
-          {/* Concentric Acoustic Waves */}
+          {/* Expanding Acoustic Waves */}
           {status === 'speaking' && (
             <>
               <div
@@ -522,17 +560,17 @@ export function VoiceChatModal({
                   width: '320px',
                   height: '320px',
                   borderRadius: '50%',
-                  border: '2px solid rgba(56, 189, 248, 0.4)',
+                  border: '2px solid rgba(56, 189, 248, 0.45)',
                   animation: 'rippleRing 2s ease-out infinite'
                 }}
               />
               <div
                 style={{
                   position: 'absolute',
-                  width: '370px',
-                  height: '370px',
+                  width: '380px',
+                  height: '380px',
                   borderRadius: '50%',
-                  border: '1px solid rgba(37, 99, 235, 0.25)',
+                  border: '1px solid rgba(37, 99, 235, 0.3)',
                   animation: 'rippleRing 2s ease-out 0.6s infinite'
                 }}
               />
@@ -546,13 +584,13 @@ export function VoiceChatModal({
                 width: '330px',
                 height: '330px',
                 borderRadius: '50%',
-                border: '2px solid rgba(16, 185, 129, 0.35)',
+                border: '2px solid rgba(16, 185, 129, 0.4)',
                 animation: 'rippleRing 2.5s ease-out infinite'
               }}
             />
           )}
 
-          {/* Large Fluid Orb Circle */}
+          {/* Large Fluid Orb */}
           <div
             className={
               status === 'listening'
@@ -564,8 +602,8 @@ export function VoiceChatModal({
                 : 'fluid-orb-idle'
             }
             style={{
-              width: '230px',
-              height: '230px',
+              width: '240px',
+              height: '240px',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -573,7 +611,7 @@ export function VoiceChatModal({
               transition: 'all 0.5s ease'
             }}
           >
-            {/* Center Visual Core */}
+            {/* Center Core */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
               {status === 'speaking' ? (
                 <>
@@ -594,14 +632,14 @@ export function VoiceChatModal({
           </div>
         </div>
 
-        {/* State Pill */}
+        {/* State Badge with Turn Counter */}
         <div
           style={{
             marginTop: '28px',
-            padding: '6px 18px',
+            padding: '7px 20px',
             borderRadius: '24px',
             backgroundColor: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.1)',
+            border: '1px solid rgba(255,255,255,0.12)',
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
@@ -623,9 +661,9 @@ export function VoiceChatModal({
             }}
           />
           <span style={{ fontSize: '12px', fontWeight: 500, color: '#e2e8f0', letterSpacing: '0.02em' }}>
-            {status === 'listening' && 'Listening to you... Speak in any language'}
-            {status === 'thinking' && 'Thinking...'}
-            {status === 'speaking' && 'Speaking... (Tap orb to interrupt)'}
+            {status === 'listening' && `● Listening (Turn ${turnCount})... Speak in Kannada or any language`}
+            {status === 'thinking' && '● Thinking...'}
+            {status === 'speaking' && '● Speaking answer... (Tap orb to interrupt)'}
             {status === 'idle' && 'Microphone paused'}
           </span>
         </div>
@@ -642,7 +680,9 @@ export function VoiceChatModal({
             </p>
           ) : (
             <p style={{ fontSize: '12px', color: '#64748b', margin: 0 }}>
-              Say anything in English, Spanish, Hindi, French, or any language...
+              {status === 'listening'
+                ? 'Speak your question... ChatGPT is listening'
+                : 'Tap the orb to start speaking'}
             </p>
           )}
         </div>
@@ -670,7 +710,7 @@ export function VoiceChatModal({
           {isMuted ? <MicOffIcon className="w-6 h-6" /> : <MicIcon className="w-6 h-6" />}
         </button>
 
-        {/* Tap to Interrupt Button */}
+        {/* Tap to Interrupt / Next Question */}
         <button
           onClick={handleInterruptOrTap}
           style={{
@@ -685,7 +725,7 @@ export function VoiceChatModal({
             justifyContent: 'center',
             boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
           }}
-          title={status === 'speaking' ? 'Interrupt response' : 'Tap to speak'}
+          title={status === 'speaking' ? 'Interrupt response' : 'Tap to speak next question'}
         >
           {status === 'speaking' ? <StopIcon className="w-6 h-6" /> : <SparklesIcon className="w-6 h-6" />}
         </button>

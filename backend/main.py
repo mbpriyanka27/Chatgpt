@@ -425,7 +425,7 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     # 3. Assemble multi-turn history memory
     history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all()
     if req.is_voice_mode:
-        llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Speak warmly, concisely, and naturally in 1-2 short sentences. Never use asterisks, emojis, bullet points, or markdown formatting."}]
+        llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Reply instantly, warmly, and naturally in 1 short sentence (under 15 words) in the exact same language the user spoke (supporting English, Kannada, Hindi, Spanish, etc.). Never use asterisks, emojis, bullet points, or markdown formatting."}]
     else:
         llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
     
@@ -441,8 +441,13 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
             rag_context = f"\n\nContext from user uploaded documents:\n{docs_text}\n\nWhen answering, cite the document name and page."
             llm_messages[0]["content"] += rag_context
 
-    for m in history_messages[-10:]:  # Last 10 turns for token budget
-        llm_messages.append({"role": m.role, "content": m.content})
+    if req.is_voice_mode:
+        # Micro-history for voice mode: only 1 prior turn so prompt tokens stay under 30 for < 200ms TTFT
+        for m in history_messages[-2:]:
+            llm_messages.append({"role": m.role, "content": m.content})
+    else:
+        for m in history_messages[-10:]:  # Last 10 turns for token budget
+            llm_messages.append({"role": m.role, "content": m.content})
 
     # 5. Stream response generator (Text or Image)
     assistant_msg_id = str(uuid.uuid4())
