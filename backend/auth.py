@@ -103,3 +103,4 @@ def seed_demo_users(db: Session):
             )
             db.add(new_user)
     db.commit()
+

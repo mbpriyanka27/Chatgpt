@@ -288,3 +288,4 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess, apiUrl }: AuthModal
     </div>
   );
 }
+

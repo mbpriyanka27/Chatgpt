@@ -18,3 +18,4 @@ echo Access the ChatGPT UI at: http://localhost:3000
 echo Backend API Swagger Docs at: http://localhost:8000/docs
 echo.
 pause
+

@@ -157,3 +157,4 @@ class UserVectorStore:
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
         top_matches = [item[1] for item in scored_chunks[:top_k]]
         return top_matches
+
