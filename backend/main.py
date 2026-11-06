@@ -98,6 +98,7 @@ class ChatStreamRequest(BaseModel):
     max_tokens: Optional[int] = 1024
     api_key: Optional[str] = None
     is_image_request: Optional[bool] = False
+    is_voice_mode: Optional[bool] = False
 
 class ImageGenerateRequest(BaseModel):
     prompt: str
@@ -423,7 +424,10 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
 
     # 3. Assemble multi-turn history memory
     history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all()
-    llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
+    if req.is_voice_mode:
+        llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Speak warmly, concisely, and naturally in 1-2 short sentences. Never use asterisks, emojis, bullet points, or markdown formatting."}]
+    else:
+        llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
     
     # 4. Handle RAG document injection if requested
     sources = []
@@ -489,10 +493,11 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
         # Initial metadata event: chat_id, message_id, sources
         yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': sources})}\n\n"
         
+        voice_token_limit = 70 if req.is_voice_mode else (req.max_tokens or 1024)
         async for chunk in stream_hosted_llm(
             messages=llm_messages,
             temperature=req.temperature or user.temperature or 0.7,
-            max_tokens=req.max_tokens or 1024,
+            max_tokens=voice_token_limit,
             model=req.model or "",
             api_key=req.api_key or ""
         ):

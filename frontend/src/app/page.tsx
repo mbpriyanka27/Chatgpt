@@ -994,8 +994,15 @@ export default function ChatGPTApp() {
       {/* Two-Way ChatGPT Voice Mode Modal */}
       <VoiceChatModal
         isOpen={isVoiceModalOpen}
-        onClose={() => setIsVoiceModalOpen(false)}
-        onSendMessage={handleVoiceModalSend}
+        onClose={() => {
+          setIsVoiceModalOpen(false);
+          if (activeChatId) loadChatMessages(activeChatId);
+          loadChats();
+        }}
+        apiUrl={API_BASE_URL}
+        token={token}
+        chatId={activeChatId}
+        selectedModel={selectedModel}
       />
 
       {/* Modals */}
