@@ -549,7 +549,23 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
                 yield f"data: {json.dumps({'event': 'chunk', 'text': chunk})}\n\n"
 
             full_content = "".join(collected_chunks)
-            if target_lang != 'en' and not has_script_for_lang(full_content, target_lang):
+            # Automatic safety net: if model refused image generation or user wanted an image
+            lower_out = full_content.lower()
+            lower_req = req.prompt.lower()
+            is_image_intent = any(w in lower_req for w in ["image", "picture", "photo", "draw", "paint", "sketch", "ಚಿತ್ರ", "ಫೋಟೋ", "तस्वीर", "चित्र"])
+            has_refusal = any(phrase in lower_out for phrase in ["can't generate image", "cannot generate image", "unable to create visual", "not able to create visual", "cannot draw", "can't draw", "as an ai language model"])
+            
+            if is_image_intent and has_refusal:
+                try:
+                    fallback_subj = re.sub(r'^(?:can you|could you|please|i want|i need|give me|show me|draw|paint|generate|create|make|an?|image|picture|photo|wallpaper|of|\s)+', '', req.prompt, flags=re.I).strip()
+                    if not fallback_subj:
+                        fallback_subj = req.prompt
+                    img_res = await generate_image(prompt=fallback_subj, user_id=user.id, model="flux")
+                    full_content = f"🎨 Generating your requested AI image for: **\"{fallback_subj}\"**...\n\n![{fallback_subj}]({img_res['url']})\n\n*(Model: {img_res['model'].upper()} • Click to view full size)*"
+                    yield f"data: {json.dumps({'event': 'replace', 'text': full_content})}\n\n"
+                except Exception as e:
+                    pass
+            elif target_lang != 'en' and not has_script_for_lang(full_content, target_lang):
                 translated = translate_text(full_content, target_lang)
                 if translated and translated != full_content:
                     full_content = translated

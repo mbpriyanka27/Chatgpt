@@ -44,9 +44,9 @@ export function VoiceChatModal({
   const [aiSpokenText, setAiSpokenText] = useState('');
   const [selectedLang, setSelectedLang] = useState<string>(() => {
     if (typeof window !== 'undefined') {
-      return localStorage.getItem('chatgpt_voice_lang') || 'kn-IN';
+      return localStorage.getItem('chatgpt_voice_lang') || 'auto';
     }
-    return 'kn-IN';
+    return 'auto';
   });
   const [isMuted, setIsMuted] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
@@ -57,7 +57,7 @@ export function VoiceChatModal({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
   const speechQueueCountRef = useRef(0);
-  const detectedLangRef = useRef('kn-IN');
+  const detectedLangRef = useRef('en-US');
   // Prevents Chrome from garbage-collecting utterances before onend fires!
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const silenceTimerRef = useRef<any>(null);
@@ -132,7 +132,7 @@ export function VoiceChatModal({
       const targetLang =
         selectedLang !== 'auto'
           ? selectedLang
-          : (navigator.language?.toLowerCase().startsWith('kn') ? 'kn-IN' : 'kn-IN');
+          : (navigator.language || 'en-US');
 
       recognition.lang = targetLang;
       detectedLangRef.current = targetLang;
@@ -426,6 +426,11 @@ export function VoiceChatModal({
     utterance.onend = onUtteranceFinish;
     utterance.onerror = onUtteranceFinish;
 
+    // Chrome autoplay policy: resume synthesis if suspended
+    if (synthRef.current.paused) {
+      synthRef.current.resume();
+    }
+
     synthRef.current.speak(utterance);
   };
 
@@ -530,7 +535,7 @@ export function VoiceChatModal({
               if (typeof window !== 'undefined') {
                 localStorage.setItem('chatgpt_voice_lang', code);
               }
-              detectedLangRef.current = code !== 'auto' ? code : 'kn-IN';
+              detectedLangRef.current = code !== 'auto' ? code : 'en-US';
               stopListening();
               setTimeout(() => startListening(), 100);
             }}
@@ -577,6 +582,42 @@ export function VoiceChatModal({
             <CloseIcon className="w-5 h-5" />
           </button>
         </div>
+      </div>
+
+      {/* Quick Language Switcher Pills */}
+      <div style={{ marginTop: '12px', display: 'flex', gap: '8px', zIndex: 10, flexWrap: 'wrap', justifyContent: 'center' }}>
+        {[
+          { code: 'auto', label: '🌐 Auto' },
+          { code: 'en-US', label: '🇺🇸 English' },
+          { code: 'kn-IN', label: '🇮🇳 ಕನ್ನಡ' },
+          { code: 'hi-IN', label: '🇮🇳 हिन्दी' }
+        ].map((item) => (
+          <button
+            key={item.code}
+            onClick={() => {
+              setSelectedLang(item.code);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chatgpt_voice_lang', item.code);
+              }
+              detectedLangRef.current = item.code !== 'auto' ? item.code : 'en-US';
+              stopListening();
+              setTimeout(() => startListening(), 100);
+            }}
+            style={{
+              padding: '4px 12px',
+              borderRadius: '16px',
+              fontSize: '11px',
+              fontWeight: 500,
+              cursor: 'pointer',
+              border: selectedLang === item.code ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
+              backgroundColor: selectedLang === item.code ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.05)',
+              color: selectedLang === item.code ? '#38bdf8' : '#94a3b8',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
       </div>
 
       {/* Center: The Iconic Large Fluid Morphing Circle */}
@@ -697,10 +738,18 @@ export function VoiceChatModal({
             }}
           />
           <span style={{ fontSize: '12px', fontWeight: 500, color: '#e2e8f0', letterSpacing: '0.02em' }}>
-            {status === 'listening' && `● Listening (Turn ${turnCount})... Speak in Kannada or any language`}
+            {status === 'listening' && (
+              selectedLang === 'kn-IN'
+                ? `● Listening in ಕನ್ನಡ (Turn ${turnCount})... Speak now`
+                : selectedLang === 'hi-IN'
+                ? `● Listening in हिन्दी (Turn ${turnCount})... Speak now`
+                : selectedLang === 'en-US'
+                ? `● Listening in English (Turn ${turnCount})... Speak now`
+                : `● Listening (Auto Turn ${turnCount})... Speak in English, Kannada or any language`
+            )}
             {status === 'thinking' && '● Thinking...'}
             {status === 'speaking' && '● Speaking answer... (Tap orb to interrupt)'}
-            {status === 'idle' && 'Microphone paused'}
+            {status === 'idle' && 'Microphone paused (Tap orb to speak)'}
           </span>
         </div>
 

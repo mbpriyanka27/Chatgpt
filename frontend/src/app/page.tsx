@@ -254,6 +254,7 @@ export default function ChatGPTApp() {
     abortControllerRef.current = abortController;
 
     try {
+      const isImgReq = text.startsWith('/image') || text.startsWith('/draw') || text.startsWith('/img') || text.startsWith('/pic');
       const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: 'POST',
         headers: {
@@ -266,6 +267,7 @@ export default function ChatGPTApp() {
           use_rag: useRag,
           model: selectedModel,
           temperature: user?.temperature || 0.7,
+          is_image_request: isImgReq,
           api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
         signal: abortController.signal
@@ -423,13 +425,35 @@ export default function ChatGPTApp() {
     const utterance = new SpeechSynthesisUtterance(cleanText);
     utterance.rate = 1.05;
 
-    const voices = window.speechSynthesis.getVoices();
-    const naturalVoice = voices.find(
-      (v) => (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Jenny')) && v.lang.startsWith('en')
-    ) || voices.find((v) => v.lang.startsWith('en'));
+    // Detect language of text script for correct pronunciation
+    let targetLang = 'en-US';
+    if (/[\u0C80-\u0CFF]/.test(cleanText)) {
+      targetLang = 'kn-IN';
+    } else if (/[\u0900-\u097F]/.test(cleanText)) {
+      targetLang = 'hi-IN';
+    } else if (/[\u0C00-\u0C7F]/.test(cleanText)) {
+      targetLang = 'te-IN';
+    } else if (/[\u0B80-\u0BFF]/.test(cleanText)) {
+      targetLang = 'ta-IN';
+    }
 
-    if (naturalVoice) {
-      utterance.voice = naturalVoice;
+    const langPrefix = targetLang.slice(0, 2).toLowerCase();
+    const voices = window.speechSynthesis.getVoices();
+    const matchedVoice = voices.find(
+      (v) => (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Neural')) &&
+             (v.lang.toLowerCase().startsWith(langPrefix) || v.lang.toLowerCase().includes(langPrefix))
+    ) || voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
+
+    if (matchedVoice) {
+      utterance.voice = matchedVoice;
+      utterance.lang = matchedVoice.lang;
+    } else {
+      utterance.lang = targetLang;
+    }
+
+    // Chrome audio policy: resume if paused/suspended
+    if (window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
     }
 
     utterance.onend = () => setSpeakingMsgId(null);
@@ -461,7 +485,8 @@ export default function ChatGPTApp() {
       const recognition = new SpeechRecognition();
       recognition.continuous = false;
       recognition.interimResults = true;
-      recognition.lang = 'en-US';
+      const savedLang = localStorage.getItem('chatgpt_voice_lang');
+      recognition.lang = savedLang && savedLang !== 'auto' ? savedLang : (navigator.language || 'en-US');
 
       recognition.onstart = () => setIsListeningMic(true);
 
