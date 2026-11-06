@@ -310,6 +310,15 @@ export default function ChatGPTApp() {
                         : m
                     )
                   );
+                } else if (payload.event === 'replace') {
+                  streamedContent = payload.text;
+                  setMessages((prev) =>
+                    prev.map((m) =>
+                      m.id === assistantMsgId
+                        ? { ...m, content: streamedContent, sources: incomingSources }
+                        : m
+                    )
+                  );
                 }
               } catch (e) {
                 // Ignore partial JSON

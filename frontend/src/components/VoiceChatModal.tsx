@@ -42,7 +42,12 @@ export function VoiceChatModal({
   const [status, setStatus] = useState<'idle' | 'listening' | 'thinking' | 'speaking'>('idle');
   const [userTranscript, setUserTranscript] = useState('');
   const [aiSpokenText, setAiSpokenText] = useState('');
-  const [selectedLang, setSelectedLang] = useState('auto');
+  const [selectedLang, setSelectedLang] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      return localStorage.getItem('chatgpt_voice_lang') || 'kn-IN';
+    }
+    return 'kn-IN';
+  });
   const [isMuted, setIsMuted] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
 
@@ -52,7 +57,7 @@ export function VoiceChatModal({
   const abortControllerRef = useRef<AbortController | null>(null);
   const isStreamingRef = useRef(false);
   const speechQueueCountRef = useRef(0);
-  const detectedLangRef = useRef('en-US');
+  const detectedLangRef = useRef('kn-IN');
   // Prevents Chrome from garbage-collecting utterances before onend fires!
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const silenceTimerRef = useRef<any>(null);
@@ -127,7 +132,7 @@ export function VoiceChatModal({
       const targetLang =
         selectedLang !== 'auto'
           ? selectedLang
-          : (navigator.language || 'en-US');
+          : (navigator.language?.toLowerCase().startsWith('kn') ? 'kn-IN' : 'kn-IN');
 
       recognition.lang = targetLang;
       detectedLangRef.current = targetLang;
@@ -152,6 +157,17 @@ export function VoiceChatModal({
 
         const currentText = final || interim;
         setUserTranscript(currentText);
+
+        // Dynamically track detected script
+        if (/[\u0C80-\u0CFF]/.test(currentText)) {
+          detectedLangRef.current = 'kn-IN';
+        } else if (/[\u0900-\u097F]/.test(currentText)) {
+          detectedLangRef.current = 'hi-IN';
+        } else if (/[\u0C00-\u0C7F]/.test(currentText)) {
+          detectedLangRef.current = 'te-IN';
+        } else if (/[\u0B80-\u0BFF]/.test(currentText)) {
+          detectedLangRef.current = 'ta-IN';
+        }
 
         // Immediate silence detector: if final phrase received, trigger query without waiting
         if (final && final.trim().length > 0) {
@@ -238,7 +254,9 @@ export function VoiceChatModal({
           prompt: query,
           model: selectedModel,
           is_voice_mode: true,
-          max_tokens: 30, // Ultra short for < 300ms sub-second response
+          voice_language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
+          language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
+          max_tokens: 35, // Ultra short for < 300ms sub-second response
           api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
         signal: abortController.signal
@@ -353,7 +371,21 @@ export function VoiceChatModal({
     utterance.pitch = 1.0;
 
     const voices = synthRef.current.getVoices();
-    const currentLangCode = detectedLangRef.current.slice(0, 2).toLowerCase();
+    // Detect speech language from text script
+    let targetLang = detectedLangRef.current || 'kn-IN';
+    if (/[\u0C80-\u0CFF]/.test(clean)) {
+      targetLang = 'kn-IN';
+    } else if (/[\u0900-\u097F]/.test(clean)) {
+      targetLang = 'hi-IN';
+    } else if (/[\u0C00-\u0C7F]/.test(clean)) {
+      targetLang = 'te-IN';
+    } else if (/[\u0B80-\u0BFF]/.test(clean)) {
+      targetLang = 'ta-IN';
+    } else if (/[\u0600-\u06FF]/.test(clean)) {
+      targetLang = 'ar-SA';
+    }
+
+    const currentLangCode = targetLang.slice(0, 2).toLowerCase();
 
     // Match voice for user's language (Kannada kn-IN, Hindi hi-IN, Spanish, etc.)
     const matchedVoice =
@@ -366,15 +398,14 @@ export function VoiceChatModal({
         (v) =>
           v.lang.toLowerCase().startsWith(currentLangCode) ||
           v.lang.toLowerCase().includes(currentLangCode)
-      ) ||
-      voices.find((v) => v.lang.startsWith('en')) ||
-      voices[0];
+      );
 
     if (matchedVoice) {
       utterance.voice = matchedVoice;
       utterance.lang = matchedVoice.lang;
     } else {
-      utterance.lang = detectedLangRef.current;
+      // Direct speech synthesis language for native browser pronunciation
+      utterance.lang = targetLang;
     }
 
     speechQueueCountRef.current += 1;
@@ -494,7 +525,12 @@ export function VoiceChatModal({
           <select
             value={selectedLang}
             onChange={(e) => {
-              setSelectedLang(e.target.value);
+              const code = e.target.value;
+              setSelectedLang(code);
+              if (typeof window !== 'undefined') {
+                localStorage.setItem('chatgpt_voice_lang', code);
+              }
+              detectedLangRef.current = code !== 'auto' ? code : 'kn-IN';
               stopListening();
               setTimeout(() => startListening(), 100);
             }}

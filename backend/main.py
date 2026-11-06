@@ -18,6 +18,7 @@ from auth import (
 from llm_client import stream_hosted_llm, preload_model
 from rag_service import UserVectorStore
 from media_service import detect_image_prompt, generate_image, transcribe_audio_file
+from multilingual_service import detect_language, translate_text, has_script_for_lang, LANGUAGE_NAMES
 from fastapi.staticfiles import StaticFiles
 from pathlib import Path
 
@@ -99,6 +100,8 @@ class ChatStreamRequest(BaseModel):
     api_key: Optional[str] = None
     is_image_request: Optional[bool] = False
     is_voice_mode: Optional[bool] = False
+    language: Optional[str] = None
+    voice_language: Optional[str] = None
 
 class ImageGenerateRequest(BaseModel):
     prompt: str
@@ -422,12 +425,21 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     chat.updated_at = datetime.datetime.utcnow()
     db.commit()
 
-    # 3. Assemble multi-turn history memory
+    # 3. Assemble multi-turn history memory and detect language
+    target_lang = detect_language(req.prompt, req.language or req.voice_language)
+    lang_label = LANGUAGE_NAMES.get(target_lang, target_lang)
+
     history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all()
     if req.is_voice_mode:
-        llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Reply instantly, warmly, and naturally in 1 short sentence (under 15 words) in the exact same language the user spoke (supporting English, Kannada, Hindi, Spanish, etc.). Never use asterisks, emojis, bullet points, or markdown formatting."}]
+        if target_lang != 'en':
+            llm_messages = [{"role": "system", "content": f"You are ChatGPT in real-time voice mode. The user spoke in {lang_label}. You MUST reply ONLY in {lang_label}. Reply in 1 short sentence (under 15 words) in {lang_label}. Never use English. Never use asterisks, emojis, bullet points, or markdown formatting."}]
+        else:
+            llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Reply instantly, warmly, and naturally in 1 short sentence (under 15 words). Never use asterisks, emojis, bullet points, or markdown formatting."}]
     else:
-        llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
+        if target_lang != 'en':
+            llm_messages = [{"role": "system", "content": f"You are ChatGPT. The user is writing in {lang_label}. You MUST reply strictly in {lang_label}. Never respond in English."}]
+        else:
+            llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
     
     # 4. Handle RAG document injection if requested
     sources = []
@@ -495,21 +507,54 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     
     async def sse_event_generator():
         collected_chunks = []
-        # Initial metadata event: chat_id, message_id, sources
-        yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': sources})}\n\n"
+        # Initial metadata event: chat_id, message_id, sources, target_lang
+        yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': sources, 'target_lang': target_lang})}\n\n"
         
         voice_token_limit = 35 if req.is_voice_mode else (req.max_tokens or 1024)
-        async for chunk in stream_hosted_llm(
-            messages=llm_messages,
-            temperature=req.temperature or user.temperature or 0.7,
-            max_tokens=voice_token_limit,
-            model=req.model or "",
-            api_key=req.api_key or ""
-        ):
-            collected_chunks.append(chunk)
-            yield f"data: {json.dumps({'event': 'chunk', 'text': chunk})}\n\n"
 
-        full_content = "".join(collected_chunks)
+        if req.is_voice_mode and target_lang != 'en':
+            # In voice mode for non-English, buffer the short clause to guarantee native language output
+            raw_chunks = []
+            async for chunk in stream_hosted_llm(
+                messages=llm_messages,
+                temperature=req.temperature or user.temperature or 0.7,
+                max_tokens=voice_token_limit,
+                model=req.model or "",
+                api_key=req.api_key or ""
+            ):
+                raw_chunks.append(chunk)
+
+            raw_text = "".join(raw_chunks).strip()
+            # If the model emitted English (0.5B fallback), translate immediately to native script
+            if not has_script_for_lang(raw_text, target_lang):
+                full_content = translate_text(raw_text, target_lang)
+            else:
+                full_content = raw_text
+
+            # Stream words with natural cadence
+            words = full_content.split(" ")
+            for idx, word in enumerate(words):
+                token = word if idx == 0 else " " + word
+                collected_chunks.append(token)
+                yield f"data: {json.dumps({'event': 'chunk', 'text': token})}\n\n"
+        else:
+            async for chunk in stream_hosted_llm(
+                messages=llm_messages,
+                temperature=req.temperature or user.temperature or 0.7,
+                max_tokens=voice_token_limit,
+                model=req.model or "",
+                api_key=req.api_key or ""
+            ):
+                collected_chunks.append(chunk)
+                yield f"data: {json.dumps({'event': 'chunk', 'text': chunk})}\n\n"
+
+            full_content = "".join(collected_chunks)
+            if target_lang != 'en' and not has_script_for_lang(full_content, target_lang):
+                translated = translate_text(full_content, target_lang)
+                if translated and translated != full_content:
+                    full_content = translated
+                    yield f"data: {json.dumps({'event': 'replace', 'text': full_content})}\n\n"
+
         # Save assistant message in DB with its own session
         db_session = SessionLocal()
         try:
