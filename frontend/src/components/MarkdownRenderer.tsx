@@ -16,18 +16,18 @@ function CodeBlock({ language, code }: CodeBlockProps) {
   };
 
   return (
-    <div className="my-3 rounded-lg overflow-hidden border border-[rgba(255,255,255,0.1)] bg-[#0d1117] text-[#c9d1d9] text-sm">
-      <div className="flex items-center justify-between px-4 py-1.5 bg-[#161b22] border-b border-[rgba(255,255,255,0.06)] text-xs text-gray-400 font-mono">
+    <div className="my-3 rounded-lg overflow-hidden border border-gray-200 bg-[#f8f9fa] text-[#1f2937] text-sm">
+      <div className="flex items-center justify-between px-4 py-1.5 bg-[#f1f3f5] border-b border-gray-200 text-xs text-gray-600 font-mono">
         <span>{language || 'text'}</span>
         <button
           onClick={handleCopy}
-          className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-[rgba(255,255,255,0.08)] text-gray-300 hover:text-white transition-colors"
+          className="flex items-center gap-1.5 px-2 py-0.5 rounded hover:bg-gray-200 text-gray-700 transition-colors"
         >
-          {copied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-400" /> : <CopyIcon className="w-3.5 h-3.5" />}
+          {copied ? <CheckIcon className="w-3.5 h-3.5 text-emerald-600" /> : <CopyIcon className="w-3.5 h-3.5" />}
           <span>{copied ? 'Copied!' : 'Copy code'}</span>
         </button>
       </div>
-      <pre className="p-4 overflow-x-auto font-mono text-[13px] leading-relaxed">
+      <pre className="p-4 overflow-x-auto font-mono text-[13px] leading-relaxed text-[#111827]">
         <code>{code}</code>
       </pre>
     </div>
@@ -155,7 +155,7 @@ export function MarkdownRenderer({ content }: { content: string }) {
     elements.push(<ParsedMarkdownText key={`text-${lastIndex}`} rawText={remainingText} />);
   }
 
-  return <div className="space-y-2 text-[#ececf1] leading-relaxed">{elements}</div>;
+  return <div className="space-y-2 text-[#1f2937] text-[15px] leading-relaxed">{elements}</div>;
 }
 
 function ParsedMarkdownText({ rawText }: { rawText: string }) {
@@ -175,7 +175,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         // Heading 3
         if (trimmed.startsWith('### ')) {
           return (
-            <h3 key={idx} className="text-base font-semibold text-white mt-3 mb-1">
+            <h3 key={idx} className="text-base font-bold text-[#0d0d0d] mt-3 mb-1">
               {formatInlineStyles(trimmed.slice(4))}
             </h3>
           );
@@ -183,7 +183,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         // Heading 2
         if (trimmed.startsWith('## ')) {
           return (
-            <h2 key={idx} className="text-lg font-bold text-white mt-4 mb-2">
+            <h2 key={idx} className="text-lg font-bold text-[#0d0d0d] mt-4 mb-2">
               {formatInlineStyles(trimmed.slice(3))}
             </h2>
           );
@@ -191,7 +191,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         // Heading 1
         if (trimmed.startsWith('# ')) {
           return (
-            <h1 key={idx} className="text-xl font-bold text-white mt-4 mb-2">
+            <h1 key={idx} className="text-xl font-bold text-[#0d0d0d] mt-4 mb-2">
               {formatInlineStyles(trimmed.slice(2))}
             </h1>
           );
@@ -199,7 +199,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         // Blockquote
         if (trimmed.startsWith('> ')) {
           return (
-            <blockquote key={idx} className="border-l-4 border-emerald-500 pl-3 py-1 my-2 text-gray-300 italic bg-[rgba(255,255,255,0.02)]">
+            <blockquote key={idx} className="border-l-4 border-emerald-500 pl-3 py-1 my-2 text-gray-700 italic bg-gray-50 rounded-r">
               {formatInlineStyles(trimmed.slice(2))}
             </blockquote>
           );
@@ -207,7 +207,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         // Bullet list
         if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
           return (
-            <li key={idx} className="ml-5 list-disc text-gray-200 my-0.5">
+            <li key={idx} className="ml-5 list-disc text-[#1f2937] my-1">
               {formatInlineStyles(trimmed.slice(2))}
             </li>
           );
@@ -216,7 +216,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
         const numMatch = trimmed.match(/^(\d+)\.\s+(.*)/);
         if (numMatch) {
           return (
-            <li key={idx} className="ml-5 list-decimal text-gray-200 my-0.5">
+            <li key={idx} className="ml-5 list-decimal text-[#1f2937] my-1">
               {formatInlineStyles(numMatch[2])}
             </li>
           );
@@ -228,7 +228,7 @@ function ParsedMarkdownText({ rawText }: { rawText: string }) {
 
         // Standard paragraph
         return (
-          <p key={idx} className="my-1">
+          <p key={idx} className="my-1.5 leading-relaxed text-[#1f2937]">
             {formatInlineStyles(line)}
           </p>
         );
@@ -251,21 +251,21 @@ function formatInlineStyles(text: string): React.ReactNode[] {
     }
     if (part.startsWith('`') && part.endsWith('`')) {
       return (
-        <code key={i} className="px-1.5 py-0.5 bg-[rgba(255,255,255,0.1)] rounded font-mono text-xs text-emerald-300">
+        <code key={i} className="px-1.5 py-0.5 bg-gray-100 border border-gray-200 rounded font-mono text-xs text-emerald-800">
           {part.slice(1, -1)}
         </code>
       );
     }
     if (part.startsWith('**') && part.endsWith('**')) {
       return (
-        <strong key={i} className="font-semibold text-white">
+        <strong key={i} className="font-semibold text-[#0d0d0d]">
           {part.slice(2, -2)}
         </strong>
       );
     }
     if (part.startsWith('*') && part.endsWith('*')) {
       return (
-        <em key={i} className="italic text-gray-300">
+        <em key={i} className="italic text-gray-700">
           {part.slice(1, -1)}
         </em>
       );

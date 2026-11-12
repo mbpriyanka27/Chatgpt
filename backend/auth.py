@@ -74,6 +74,14 @@ def seed_demo_users(db: Session):
     """Seed test demo accounts Alice and Bob for instant one-click login and testing."""
     users_data = [
         {
+            "id": "user-divya-uid-100",
+            "email": "divya@example.com",
+            "password": "password123",
+            "display_name": "Divya Gadwal",
+            "photo_url": "",
+            "provider": "demo",
+        },
+        {
             "id": "user-alice-uid-101",
             "email": "alice@example.com",
             "password": "password123",

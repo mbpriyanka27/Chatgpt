@@ -168,3 +168,4 @@ def translate_text(text: str, target_lang: str) -> str:
         return phrases.get('default', text)
 
     return text
+

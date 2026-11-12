@@ -50,8 +50,9 @@ def on_startup():
     finally:
         db.close()
     
-    # Preload inference engine into RAM at startup so first response is sub-second
-    preload_model()
+    # Preload inference engine into RAM in background thread so server starts instantly
+    import threading
+    threading.Thread(target=preload_model, daemon=True).start()
 
 
 # ==========================================

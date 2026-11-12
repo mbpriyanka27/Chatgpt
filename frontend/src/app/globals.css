@@ -1,6 +1,6 @@
 :root {
-  --background: #0e0e17;
-  --foreground: #ececf1;
+  --background: #ffffff;
+  --foreground: #111827;
 }
 
 * {
@@ -13,9 +13,9 @@ body {
   width: 100%;
   margin: 0;
   padding: 0;
-  background-color: #0e0e17;
-  color: #ececf1;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #ffffff;
+  color: #111827;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   overflow: hidden;
   -webkit-font-smoothing: antialiased;
 }
@@ -31,12 +31,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.12);
   border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.25);
+  background: rgba(0, 0, 0, 0.22);
 }
 
 /* Pulse animation */

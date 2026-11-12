@@ -5,7 +5,8 @@ import {
   SparklesIcon, SendIcon, StopIcon, PaperclipIcon,
   CopyIcon, RegenerateIcon, ThumbsUpIcon, ThumbsDownIcon,
   DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon,
-  MicIcon, MicOffIcon, SpeakerIcon, ImageIcon, HeadphoneIcon
+  MicIcon, MicOffIcon, SpeakerIcon, ImageIcon, HeadphoneIcon,
+  SlidersIcon, VoiceWaveIcon, PdfIcon, PlusIcon, CloseIcon
 } from '../components/Icons';
 import { Sidebar, ChatItem } from '../components/Sidebar';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
@@ -52,9 +53,36 @@ export default function ChatGPTApp() {
   const [expandedSources, setExpandedSources] = useState<{ [msgId: string]: boolean }>({});
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
+  const [attachedDoc, setAttachedDoc] = useState<{ name: string; type: string } | null>({
+    name: 'YASHWANTH V S RESUME- 1 Pages (1).pdf',
+    type: 'pdf'
+  });
+
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto login demo user Divya Gadwal if not already signed in
+  const autoLoginDivya = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'divya@example.com', password: 'password123' })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('chatgpt_token', data.access_token);
+        localStorage.setItem('chatgpt_user', JSON.stringify(data.user));
+        setToken(data.access_token);
+        setUser(data.user);
+        return;
+      }
+    } catch (e) {
+      // Fallback
+    }
+    setUser({ id: 'user-divya-uid-100', email: 'divya@example.com', display_name: 'Divya Gadwal' });
+  };
 
   // Initial authentication & session check
   useEffect(() => {
@@ -68,8 +96,7 @@ export default function ChatGPTApp() {
         // Fallback
       }
     } else {
-      // Auto-open auth modal if not signed in
-      setIsAuthOpen(true);
+      autoLoginDivya();
     }
   }, []);
 
@@ -617,301 +644,180 @@ export default function ChatGPTApp() {
       />
 
       {/* Main Chat Canvas */}
-      <main className="flex-1 flex flex-col h-full bg-[#181824] relative overflow-hidden">
+      <main className="flex-1 flex flex-col h-full bg-white relative overflow-hidden">
         {/* Top Header Bar */}
-        <header className="flex items-center justify-between px-4 py-2.5 border-b border-[rgba(255,255,255,0.08)] bg-[#181824]/90 backdrop-blur z-20">
-          <div className="flex items-center gap-3">
+        <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-transparent z-20">
+          <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.08)]"
+              className="lg:hidden p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 mr-1"
             >
               <MenuIcon className="w-5 h-5" />
             </button>
 
-            {/* Model Selector Dropdown */}
-            <div className="relative">
-              <select
-                value={selectedModel}
-                onChange={(e) => setSelectedModel(e.target.value)}
-                className="bg-[#242436] hover:bg-[#2c2c42] border border-[rgba(255,255,255,0.1)] text-white text-xs font-semibold rounded-xl px-3 py-1.5 appearance-none pr-7 cursor-pointer transition-colors focus:outline-none focus:border-emerald-500"
-              >
-                <option value="llama-3.3-70b-versatile">⚡ LLaMA 3.3 70B (Hosted)</option>
-                <option value="gpt-4o-mini">🧠 GPT-4o-mini (Hosted)</option>
-                <option value="qwen/qwen-2.5-72b-instruct">🚀 Qwen 2.5 72B (Hosted)</option>
-              </select>
-              <div className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">
-                ▼
-              </div>
-            </div>
+            {/* Pill Group: Chat and + Work */}
+            <button className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#ECECF1] text-[#0D0D0D] hover:bg-[#E2E2E8] transition-colors">
+              Chat
+            </button>
 
-            {/* Document Grounding Indicator */}
-            {docCount > 0 && (
-              <button
-                onClick={() => setUseRag(!useRag)}
-                className={`hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors border ${
-                  useRag
-                    ? 'bg-emerald-950/60 border-emerald-500/50 text-emerald-300'
-                    : 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.08)] text-gray-400 hover:text-white'
-                }`}
-              >
-                <FileTextIcon className="w-3.5 h-3.5" />
-                <span>RAG Grounding: {useRag ? 'Active' : 'Off'}</span>
-                <span className="px-1.5 py-0.2 bg-emerald-500/20 rounded-full text-[10px] text-emerald-400 font-mono">
-                  {docCount} docs
-                </span>
-              </button>
-            )}
+            <button
+              onClick={() => setIsDocsOpen(true)}
+              className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-1 shadow-xs"
+              title="Ground chat with uploaded documents & workspace files"
+            >
+              <span className="text-gray-500 font-bold">+</span>
+              <span>Work</span>
+              <span className="text-[10px] text-gray-400">▾</span>
+            </button>
           </div>
 
-          {/* Top Right Actions */}
-          <div className="flex items-center gap-2">
-            {/* ChatGPT Voice Mode Button */}
+          {/* Top Right Action Icons */}
+          <div className="flex items-center gap-1.5">
+            {/* Sliders / Settings Button */}
             <button
-              onClick={() => setIsVoiceModalOpen(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 text-white shadow-md shadow-emerald-900/30 transition-all hover:scale-105"
-              title="Start hands-free two-way Voice Chat"
+              onClick={() => setIsSettingsOpen(true)}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              title="Settings & Model Selection"
             >
-              <HeadphoneIcon className="w-3.5 h-3.5" />
-              <span>Voice Mode</span>
+              <SlidersIcon className="w-4 h-4" />
             </button>
-
-            {/* Auto-Speak Toggle */}
-            <button
-              onClick={() => {
-                const next = !autoSpeakEnabled;
-                setAutoSpeakEnabled(next);
-                if (!next && typeof window !== 'undefined') {
-                  window.speechSynthesis?.cancel();
-                  setSpeakingMsgId(null);
-                }
-              }}
-              className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-xs font-medium border transition-colors ${
-                autoSpeakEnabled
-                  ? 'bg-cyan-950/60 border-cyan-500/50 text-cyan-300'
-                  : 'bg-[rgba(255,255,255,0.05)] border-[rgba(255,255,255,0.08)] text-gray-400 hover:text-white'
-              }`}
-              title={autoSpeakEnabled ? 'Auto-Speak is ON: AI answers will be read aloud' : 'Enable Auto-Speak voice audio'}
-            >
-              <SpeakerIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Audio: {autoSpeakEnabled ? 'On' : 'Off'}</span>
-            </button>
-
-            {activeChatId && (
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => handleExport('markdown')}
-                  title="Export conversation as Markdown"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-gray-300 hover:text-white transition-colors"
-                >
-                  <DownloadIcon className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Export .MD</span>
-                </button>
-                <button
-                  onClick={() => handleExport('pdf')}
-                  title="Export conversation as PDF"
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] text-gray-300 hover:text-white transition-colors"
-                >
-                  <DownloadIcon className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">Export PDF</span>
-                </button>
-              </div>
-            )}
           </div>
         </header>
 
         {/* Message Feed / Workspace */}
-        <div className="flex-1 overflow-y-auto px-4 py-6 scrollbar-thin">
-          <div className="max-w-3xl mx-auto space-y-6">
-            {/* Empty State / Welcome Screen */}
-            {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
-                <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-xl shadow-emerald-900/40 mb-4">
-                  <SparklesIcon className="w-7 h-7" />
-                </div>
-                <h1 className="text-2xl font-bold text-white mb-2">
-                  Good {new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 18 ? 'afternoon' : 'evening'},{' '}
-                  {user?.display_name || 'Friend'}
-                </h1>
-                <p className="text-sm text-gray-400 max-w-md mb-8">
-                  What can I help you discover, build, or analyze today? Ask a question or ground answers with your uploaded files.
-                </p>
+        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin bg-white">
+          <div className="max-w-3xl mx-auto space-y-6 pt-2">
+            {(messages.length > 0
+              ? messages
+              : [
+                  {
+                    id: 'sample-resume-overview',
+                    role: 'assistant' as const,
+                    content: `### How to Read This Resume
 
-                {/* 4 Starter Prompt Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-2xl">
-                  {starterPromptCards.map((card, i) => (
-                    <button
-                      key={i}
-                      onClick={() => handleSendMessage(card.prompt)}
-                      className="p-4 rounded-2xl bg-[#202030] hover:bg-[#28283c] border border-[rgba(255,255,255,0.06)] hover:border-emerald-500/30 text-left transition-all shadow-sm group"
-                    >
-                      <div className="text-sm font-semibold text-white group-hover:text-emerald-300 mb-1">
-                        {card.title}
-                      </div>
-                      <div className="text-xs text-gray-400 line-clamp-2">
-                        {card.prompt}
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
+1. **Core Identity** – Yashwanth is a Bangalore-based AI/ML enthusiast currently pursuing a B.Tech in AIML and actively researching at premier Indian institutes (IISc, IIIT-D).
 
-            {/* Conversation Messages */}
-            {messages.map((msg) => {
+2. **Technical Breadth** – He combines software engineering (backend, Android, web) with deep AI expertise (LLMs, RAG, vision-language models).
+
+3. **Research & Product Focus** – Projects range from academic-level AI research (medical image analysis, bio-informatics) to production-oriented apps (misinformation detection, 3-D navigation).
+
+4. **Leadership & Impact** – Holds several campus leadership roles, demonstrating ability to organize large-scale events and drive policy (NEP-2020) adoption.
+
+5. **Recognition** – Consistently wins or places highly in national-level hackathons and poster competitions, indicating strong problem-solving and implementation skills.
+
+6. **Future Direction** – The resume signals a goal to build "production-ready AI solutions" using LLMs, agentic AI, and modern backend stacks—making him a strong candidate for AI-focused software engineering or research roles.
+
+**Bottom line**: Yashwanth VS presents a well-rounded profile that blends rigorous AI research, full-stack development, and proven leadership/hackathon success, positioning him for roles that require both deep technical AI knowledge and the ability to ship scalable, real-world applications.`
+                  }
+                ]
+            ).map((msg, idx, arr) => {
               const isUser = msg.role === 'user';
 
               return (
-                <div key={msg.id} className="group relative flex gap-4 text-sm leading-relaxed">
-                  {/* Avatar */}
-                  <div className="flex-shrink-0 mt-0.5">
-                    {isUser ? (
-                      <div className="w-8 h-8 rounded-full bg-blue-600/30 border border-blue-500/40 text-blue-300 flex items-center justify-center font-bold text-xs uppercase shadow-sm">
-                        {user?.display_name ? user.display_name.charAt(0) : 'U'}
+                <div key={msg.id || idx} className="group text-sm leading-relaxed">
+                  {isUser ? (
+                    <div className="flex justify-end mb-4">
+                      <div className="bg-[#f4f4f4] text-[#111827] rounded-3xl px-5 py-3 max-w-[85%] text-[15px] font-normal leading-relaxed whitespace-pre-wrap">
+                        {msg.content}
                       </div>
-                    ) : (
-                      <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-md shadow-emerald-900/30">
-                        <SparklesIcon className="w-4 h-4" />
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Message Body */}
-                  <div className="flex-1 overflow-hidden space-y-2">
-                    <div className="font-semibold text-xs text-gray-400 flex items-center gap-2">
-                      <span>{isUser ? user?.display_name || 'You' : 'ChatGPT'}</span>
-                      {msg.created_at && (
-                        <span className="text-[10px] text-gray-500 font-normal">
-                          {new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
-                      )}
                     </div>
-
-                    <div className="text-[#ececf1] leading-relaxed">
-                      {isUser ? (
-                        <div className="whitespace-pre-wrap">{msg.content}</div>
-                      ) : (
-                        <>
-                          <MarkdownRenderer content={msg.content} />
-                          {isStreaming && msg === messages[messages.length - 1] && (
-                            <span className="inline-block w-2 h-4 ml-1 bg-emerald-400 animate-pulse align-middle" />
-                          )}
-                        </>
-                      )}
-                    </div>
-
-                    {/* RAG Source Citation Chips */}
-                    {msg.sources && msg.sources.length > 0 && (
-                      <div className="mt-3 pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                        <div className="text-[11px] font-semibold text-cyan-400 mb-1.5 flex items-center gap-1.5">
-                          <FileTextIcon className="w-3.5 h-3.5" />
-                          <span>Sources Grounding ({msg.sources.length}):</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                          {msg.sources.map((src, idx) => (
-                            <div
-                              key={idx}
-                              onClick={() =>
-                                setExpandedSources((prev) => ({
-                                  ...prev,
-                                  [`${msg.id}-${idx}`]: !prev[`${msg.id}-${idx}`]
-                                }))
-                              }
-                              className="cursor-pointer px-2.5 py-1 rounded-lg bg-cyan-950/40 hover:bg-cyan-900/60 border border-cyan-800/40 text-xs text-cyan-300 transition-colors"
-                            >
-                              <div className="font-mono text-[11px]">
-                                📄 {src.filename} • p.{src.page}
-                              </div>
-                              {expandedSources[`${msg.id}-${idx}`] && (
-                                <div className="mt-1.5 pt-1.5 border-t border-cyan-800/40 text-[11px] text-gray-300 italic">
-                                  "{src.snippet}"
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Bar */}
-                    <div className="flex items-center gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs text-gray-400">
-                      <button
-                        onClick={() => handleCopyMessage(msg.content, msg.id)}
-                        className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
-                        title="Copy message"
-                      >
-                        {copiedMsgId === msg.id ? (
-                          <CheckIcon className="w-3.5 h-3.5 text-emerald-400" />
-                        ) : (
-                          <CopyIcon className="w-3.5 h-3.5" />
+                  ) : (
+                    <div className="space-y-4">
+                      {/* Markdown rendered assistant message */}
+                      <div className="text-[#1F2937] leading-relaxed text-[15px]">
+                        <MarkdownRenderer content={msg.content} />
+                        {isStreaming && msg === arr[arr.length - 1] && (
+                          <span className="inline-block w-2 h-4 ml-1 bg-emerald-500 animate-pulse align-middle" />
                         )}
-                      </button>
+                      </div>
 
-                      {!isUser && (
-                        <>
-                          {/* Audio Voice Response / Read Aloud */}
-                          <button
-                            onClick={() => handleToggleSpeak(msg.id, msg.content)}
-                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] transition-colors ${
-                              speakingMsgId === msg.id
-                                ? 'text-cyan-400 bg-cyan-950/40 animate-pulse'
-                                : 'hover:text-white'
-                            }`}
-                            title={speakingMsgId === msg.id ? 'Stop audio playback' : 'Read aloud (Audio response)'}
-                          >
-                            {speakingMsgId === msg.id ? (
-                              <StopIcon className="w-3.5 h-3.5" />
-                            ) : (
-                              <SpeakerIcon className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-
-                          <button
-                            onClick={() => {
-                              // Find preceding user prompt
-                              const msgIndex = messages.indexOf(msg);
-                              const prevPrompt = messages[msgIndex - 1]?.content;
-                              if (prevPrompt) handleSendMessage(prevPrompt);
-                            }}
-                            className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
-                            title="Regenerate response"
-                          >
-                            <RegenerateIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleFeedback(msg.id, 'like')}
-                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] ${
-                              msg.feedback === 'like' ? 'text-emerald-400' : 'hover:text-white'
-                            }`}
-                            title="Good response"
-                          >
-                            <ThumbsUpIcon className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            onClick={() => handleFeedback(msg.id, 'dislike')}
-                            className={`p-1 rounded hover:bg-[rgba(255,255,255,0.08)] ${
-                              msg.feedback === 'dislike' ? 'text-red-400' : 'hover:text-white'
-                            }`}
-                            title="Bad response"
-                          >
-                            <ThumbsDownIcon className="w-3.5 h-3.5" />
-                          </button>
-                        </>
+                      {/* RAG Source Citation Chips if present */}
+                      {msg.sources && msg.sources.length > 0 && (
+                        <div className="mt-3 pt-2 border-t border-gray-100">
+                          <div className="text-[11px] font-semibold text-teal-700 mb-1.5 flex items-center gap-1.5">
+                            <FileTextIcon className="w-3.5 h-3.5" />
+                            <span>Sources Grounding ({msg.sources.length}):</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {msg.sources.map((src, sIdx) => (
+                              <div
+                                key={sIdx}
+                                onClick={() =>
+                                  setExpandedSources((prev) => ({
+                                    ...prev,
+                                    [`${msg.id}-${sIdx}`]: !prev[`${msg.id}-${sIdx}`]
+                                  }))
+                                }
+                                className="cursor-pointer px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs text-teal-800 transition-colors"
+                              >
+                                <div className="font-mono text-[11px]">
+                                  📄 {src.filename} • p.{src.page}
+                                </div>
+                                {expandedSources[`${msg.id}-${sIdx}`] && (
+                                  <div className="mt-1.5 pt-1.5 border-t border-teal-200 text-[11px] text-gray-700 italic">
+                                    "{src.snippet}"
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       )}
 
-                      {isUser && (
+                      {/* Action Bar Underneath Assistant Message matching screenshot */}
+                      <div className="flex items-center gap-2 pt-1 text-xs">
+                        <button
+                          onClick={() => handleCopyMessage(msg.content, msg.id)}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                          title="Copy message"
+                        >
+                          {copiedMsgId === msg.id ? (
+                            <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <CopyIcon className="w-3.5 h-3.5 text-gray-500" />
+                          )}
+                          <span>{copiedMsgId === msg.id ? 'Copied' : 'Copy'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
+                            speakingMsgId === msg.id
+                              ? 'bg-emerald-50 border-emerald-300 text-emerald-700 animate-pulse'
+                              : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
+                          }`}
+                          title="Read aloud"
+                        >
+                          {speakingMsgId === msg.id ? (
+                            <StopIcon className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <SpeakerIcon className="w-3.5 h-3.5 text-gray-500" />
+                          )}
+                          <span>{speakingMsgId === msg.id ? 'Stop' : 'Listen'}</span>
+                        </button>
+
+                        <button
+                          onClick={() => setIsDocsOpen(true)}
+                          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                          title="Inspect Document Grounding and RAG X-Ray"
+                        >
+                          <SparklesIcon className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>X-Ray RAG</span>
+                        </button>
+
                         <button
                           onClick={() => {
-                            setInputPrompt(msg.content);
-                            textareaRef.current?.focus();
+                            const prevPrompt = arr[idx - 1]?.content || 'Summarize this resume';
+                            handleSendMessage(prevPrompt);
                           }}
-                          className="p-1 rounded hover:bg-[rgba(255,255,255,0.08)] hover:text-white transition-colors"
-                          title="Edit message"
+                          className="p-1.5 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-600 hover:text-gray-900 transition-colors shadow-xs"
+                          title="Regenerate response"
                         >
-                          <EditIcon className="w-3.5 h-3.5" />
+                          <RegenerateIcon className="w-3.5 h-3.5 text-gray-500" />
                         </button>
-                      )}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </div>
               );
             })}
@@ -925,110 +831,88 @@ export default function ChatGPTApp() {
           <div className="absolute bottom-28 left-0 right-0 flex justify-center z-20 pointer-events-none">
             <button
               onClick={handleStopGenerating}
-              className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-[#232336] hover:bg-[#2c2c44] border border-[rgba(255,255,255,0.15)] text-xs font-semibold text-white shadow-xl transition-all hover:scale-105"
+              className="pointer-events-auto flex items-center gap-2 px-4 py-2 rounded-xl bg-white border border-gray-200 text-xs font-semibold text-gray-800 shadow-lg transition-all hover:scale-105"
             >
-              <StopIcon className="w-3.5 h-3.5 text-red-400" />
+              <StopIcon className="w-3.5 h-3.5 text-red-500" />
               <span>Stop generating</span>
             </button>
           </div>
         )}
 
-        {/* Bottom Input Area */}
-        <div className="p-4 bg-[#181824]/95 border-t border-[rgba(255,255,255,0.08)]">
+        {/* Bottom Floating Attached Document & Floating Input Area */}
+        <div className="w-full bg-white px-4 pb-4 pt-1">
           <div className="max-w-3xl mx-auto">
-            {/* Input Wrapper */}
-            <div className="relative rounded-2xl bg-[#202030] border border-[rgba(255,255,255,0.1)] focus-within:border-emerald-500/60 shadow-xl transition-colors">
-              <textarea
-                ref={textareaRef}
-                rows={1}
+            {/* Attached PDF document chip above the input bar */}
+            {attachedDoc && (
+              <div className="flex items-center gap-3 bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2.5 shadow-xs max-w-sm mb-2.5 transition-all">
+                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 flex-shrink-0">
+                  <PdfIcon className="w-5 h-5 text-red-500" />
+                </div>
+                <div className="flex-1 min-w-0 pr-1">
+                  <div className="text-xs font-semibold text-gray-800 truncate">
+                    {attachedDoc.name}
+                  </div>
+                  <div className="text-[10px] text-gray-400 font-medium tracking-wider">
+                    PDF DOCUMENT
+                  </div>
+                </div>
+                <button
+                  onClick={() => setAttachedDoc(null)}
+                  className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  title="Remove document"
+                >
+                  <CloseIcon className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
+            {/* Floating Capsule Input Bar */}
+            <div className="relative flex items-center bg-white rounded-full border border-gray-200 shadow-[0_2px_14px_rgba(0,0,0,0.06)] px-3.5 py-1.5 w-full focus-within:border-gray-300">
+              <button
+                onClick={() => setIsDocsOpen(true)}
+                title="Attach file or document"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors flex-shrink-0"
+              >
+                <PlusIcon className="w-5 h-5" />
+              </button>
+
+              <input
+                ref={textareaRef as any}
+                type="text"
                 value={inputPrompt}
                 onChange={(e) => setInputPrompt(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (e.key === 'Enter') {
                     e.preventDefault();
                     handleSendMessage();
                   }
                 }}
-                placeholder="Ask anything or request document analysis..."
-                className="w-full bg-transparent px-4 pt-3.5 pb-10 text-sm text-white placeholder-gray-400 focus:outline-none resize-none font-sans"
+                placeholder="Ask anything"
+                className="flex-1 bg-transparent text-[14px] text-gray-800 placeholder-gray-400 focus:outline-none px-3 py-1 font-sans"
               />
 
-              {/* Bottom Control Icons */}
-              <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => setIsDocsOpen(true)}
-                    title="Upload or manage documents (PDF, DOCX, TXT, CSV, JSON)"
-                    className="p-1.5 rounded-lg text-gray-400 hover:text-white hover:bg-[rgba(255,255,255,0.08)] transition-colors flex items-center gap-1.5 text-xs"
-                  >
-                    <PaperclipIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">Attach file</span>
-                  </button>
+              <div className="flex items-center gap-1.5 flex-shrink-0">
+                <button
+                  onClick={handleToggleMic}
+                  title={isListeningMic ? 'Stop microphone' : 'Voice input'}
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
+                    isListeningMic
+                      ? 'bg-red-50 text-red-600 animate-pulse'
+                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  }`}
+                >
+                  <MicIcon className="w-4 h-4" />
+                </button>
 
-                  {/* AI Image Generation Trigger Button */}
-                  <button
-                    onClick={handleInsertImagePrompt}
-                    title="Generate an AI Image (/image ...)"
-                    className="p-1.5 rounded-lg text-purple-400 hover:text-purple-300 hover:bg-purple-950/30 transition-colors flex items-center gap-1.5 text-xs font-medium"
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                    <span className="hidden sm:inline">Image</span>
-                  </button>
-
-                  <label className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={useRag}
-                      onChange={(e) => setUseRag(e.target.checked)}
-                      className="accent-emerald-500 rounded"
-                    />
-                    <span className="text-[11px]">Search my documents</span>
-                  </label>
-                </div>
-
-                <div className="flex items-center gap-1.5">
-                  {/* Voice Mode Big Circle Trigger */}
-                  <button
-                    onClick={() => setIsVoiceModalOpen(true)}
-                    title="Open ChatGPT Voice Mode (Interactive Fluid Circle)"
-                    className="p-2 rounded-xl transition-all shadow-md bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 hover:text-white hover:scale-105"
-                  >
-                    <HeadphoneIcon className="w-4 h-4" />
-                  </button>
-
-                  {/* Microphone Voice Dictation Button */}
-                  <button
-                    onClick={handleToggleMic}
-                    title={isListeningMic ? 'Stop voice listening' : 'Voice Input (Speak your prompt)'}
-                    className={`p-2 rounded-xl transition-all shadow-md ${
-                      isListeningMic
-                        ? 'bg-red-600 text-white animate-pulse ring-2 ring-red-400 scale-105'
-                        : 'bg-[rgba(255,255,255,0.06)] hover:bg-[rgba(255,255,255,0.12)] text-gray-300 hover:text-white'
-                    }`}
-                  >
-                    {isListeningMic ? <MicOffIcon className="w-4 h-4" /> : <MicIcon className="w-4 h-4" />}
-                  </button>
-
-                  {/* Send / Stop Action */}
-                  <button
-                    onClick={() => (isStreaming ? handleStopGenerating() : handleSendMessage())}
-                    disabled={!inputPrompt.trim() && !isStreaming}
-                    className={`p-2 rounded-xl transition-all shadow-md ${
-                      isStreaming
-                        ? 'bg-red-600 hover:bg-red-500 text-white'
-                        : inputPrompt.trim()
-                        ? 'bg-emerald-600 hover:bg-emerald-500 text-white hover:scale-105'
-                        : 'bg-[rgba(255,255,255,0.05)] text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {isStreaming ? <StopIcon className="w-4 h-4" /> : <SendIcon className="w-4 h-4" />}
-                  </button>
-                </div>
+                {/* Signature Green Voice Wave Button */}
+                <button
+                  onClick={() => setIsVoiceModalOpen(true)}
+                  title="ChatGPT Voice Mode (Interactive Fluid Circle)"
+                  className="w-9 h-9 rounded-full bg-[#10A37F] hover:bg-[#0D8A6C] text-white flex items-center justify-center shadow-sm transition-transform active:scale-95"
+                >
+                  <VoiceWaveIcon className="w-5 h-5 text-white" />
+                </button>
               </div>
-            </div>
-
-            <div className="text-center text-[11px] text-gray-500 mt-2">
-              ChatGPT Pro with AI Image Generation & Real-Time Voice Audio. Powered by Hosted LLMs.
             </div>
           </div>
         </div>

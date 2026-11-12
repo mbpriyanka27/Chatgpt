@@ -242,3 +242,58 @@ export function HeadphoneIcon({ className = "w-4 h-4" }: { className?: string })
   );
 }
 
+export function VoiceWaveIcon({ className = "w-5 h-5" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <rect x="3" y="9" width="2.5" height="6" rx="1.25" />
+      <rect x="8" y="5" width="2.5" height="14" rx="1.25" />
+      <rect x="13.5" y="3" width="2.5" height="18" rx="1.25" />
+      <rect x="19" y="8" width="2.5" height="8" rx="1.25" />
+    </svg>
+  );
+}
+
+export function SidebarCollapseIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect width="18" height="18" x="3" y="3" rx="2" />
+      <path d="M9 3v18" />
+    </svg>
+  );
+}
+
+export function SlidersIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" x2="4" y1="21" y2="14" />
+      <line x1="4" x2="4" y1="10" y2="3" />
+      <line x1="12" x2="12" y1="21" y2="12" />
+      <line x1="12" x2="12" y1="8" y2="3" />
+      <line x1="20" x2="20" y1="21" y2="16" />
+      <line x1="20" x2="20" y1="12" y2="3" />
+      <line x1="1" x2="7" y1="14" y2="14" />
+      <line x1="9" x2="15" y1="8" y2="8" />
+      <line x1="17" x2="23" y1="16" y2="16" />
+    </svg>
+  );
+}
+
+export function PdfIcon({ className = "w-6 h-6" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none">
+      <path d="M14 2H6C4.89543 2 4 2.89543 4 4V20C4 21.1046 4.89543 22 6 22H18C19.1046 22 20 21.1046 20 20V8L14 2Z" fill="#FEE2E2" stroke="#EF4444" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M14 2V8H20" stroke="#EF4444" strokeWidth="1.5" strokeLinejoin="round"/>
+      <path d="M9 13H10C10.5523 13 11 13.4477 11 14C11 14.5523 10.5523 15 10 15H9V13ZM9 13V17" stroke="#DC2626" strokeWidth="1.5" strokeLinecap="round"/>
+    </svg>
+  );
+}
+
+export function NewChatPenIcon({ className = "w-4 h-4" }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 20h4L18.5 9.5a2.828 2.828 0 0 0-4-4L4 16v4Z" />
+      <line x1="13.5" y1="6.5" x2="17.5" y2="10.5" />
+    </svg>
+  );
+}
+
