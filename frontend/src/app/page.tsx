@@ -63,7 +63,7 @@ export default function ChatGPTApp() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Auto login demo user Divya Gadwal if not already signed in
-  const autoLoginDivya = async () => {
+  const autoLoginDivya = async (): Promise<string | null> => {
     try {
       const res = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
@@ -76,28 +76,39 @@ export default function ChatGPTApp() {
         localStorage.setItem('chatgpt_user', JSON.stringify(data.user));
         setToken(data.access_token);
         setUser(data.user);
-        return;
+        return data.access_token;
       }
     } catch (e) {
-      // Fallback
+      console.warn('Auto-login attempt failed:', e);
     }
     setUser({ id: 'user-divya-uid-100', email: 'divya@example.com', display_name: 'Divya Gadwal' });
+    return null;
   };
 
-  // Initial authentication & session check
+  // Initial authentication & session check with self-healing validation
   useEffect(() => {
-    const savedToken = localStorage.getItem('chatgpt_token');
-    const savedUser = localStorage.getItem('chatgpt_user');
-    if (savedToken && savedUser) {
-      setToken(savedToken);
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        // Fallback
+    const initAuth = async () => {
+      const savedToken = localStorage.getItem('chatgpt_token');
+      if (savedToken) {
+        try {
+          const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
+            headers: { Authorization: `Bearer ${savedToken}` }
+          });
+          if (res.ok) {
+            const userData = await res.json();
+            setToken(savedToken);
+            setUser(userData);
+            return;
+          }
+        } catch (e) {
+          // Fall through to auto-login
+        }
       }
-    } else {
-      autoLoginDivya();
-    }
+      // If token missing, invalid, or expired, auto-login Divya Gadwal
+      await autoLoginDivya();
+    };
+
+    initAuth();
   }, []);
 
   // Keyboard shortcuts (Ctrl+Shift+O = new chat, Ctrl+K = search)
@@ -282,11 +293,12 @@ export default function ChatGPTApp() {
 
     try {
       const isImgReq = text.startsWith('/image') || text.startsWith('/draw') || text.startsWith('/img') || text.startsWith('/pic');
-      const response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+      let currentToken = token;
+      let response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
+          Authorization: `Bearer ${currentToken}`
         },
         body: JSON.stringify({
           chat_id: activeChatId,
@@ -299,6 +311,31 @@ export default function ChatGPTApp() {
         }),
         signal: abortController.signal
       });
+
+      // Self-heal session if token was rejected or user not found
+      if (response.status === 401) {
+        const freshToken = await autoLoginDivya();
+        if (freshToken) {
+          currentToken = freshToken;
+          response = await fetch(`${API_BASE_URL}/api/chat/stream`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${freshToken}`
+            },
+            body: JSON.stringify({
+              chat_id: activeChatId,
+              prompt: text,
+              use_rag: useRag,
+              model: selectedModel,
+              temperature: user?.temperature || 0.7,
+              is_image_request: isImgReq,
+              api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
+            }),
+            signal: abortController.signal
+          });
+        }
+      }
 
       if (!response.ok) {
         const err = await response.json();
