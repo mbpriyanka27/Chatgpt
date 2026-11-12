@@ -67,9 +67,8 @@ function ImageCard({ src, alt }: { src: string; alt: string }) {
           alt={alt}
           onLoad={() => setLoaded(true)}
           onClick={() => setIsZoomed(true)}
-          className={`w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02] ${
-            loaded ? 'block' : 'hidden'
-          }`}
+          className={`w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02] ${loaded ? 'block' : 'hidden'
+            }`}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
           <span className="text-xs text-white/90 font-medium truncate max-w-[70%]">{alt}</span>

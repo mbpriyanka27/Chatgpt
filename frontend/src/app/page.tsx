@@ -53,14 +53,65 @@ export default function ChatGPTApp() {
   const [expandedSources, setExpandedSources] = useState<{ [msgId: string]: boolean }>({});
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
-  const [attachedDoc, setAttachedDoc] = useState<{ name: string; type: string } | null>({
-    name: 'YASHWANTH V S RESUME- 1 Pages (1).pdf',
-    type: 'pdf'
-  });
+  const [attachedDoc, setAttachedDoc] = useState<{ name: string; type: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Direct file attachment handler
+  const handleDirectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+    setAttachedDoc({ name: file.name, type: `${ext} DOCUMENT` });
+    setUseRag(true);
+
+    if (!token) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const res = await fetch(`${API_BASE_URL}/api/documents/upload`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: formData
+      });
+      if (res.ok) {
+        loadDocCount();
+      }
+    } catch (err) {
+      console.error('Error uploading file:', err);
+    }
+  };
+
+  // Google Login Handler
+  const handleGoogleLogin = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/auth/google`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: 'google.user@example.com',
+          display_name: 'Google User',
+          photo_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150'
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        localStorage.setItem('chatgpt_token', data.access_token);
+        localStorage.setItem('chatgpt_user', JSON.stringify(data.user));
+        setToken(data.access_token);
+        setUser(data.user);
+        loadChats();
+        loadDocCount();
+      }
+    } catch (err) {
+      console.error('Google login failed:', err);
+    }
+  };
 
   // Auto login demo user Divya Gadwal if not already signed in
   const autoLoginDivya = async (): Promise<string | null> => {
@@ -676,6 +727,7 @@ export default function ChatGPTApp() {
           setIsAuthOpen(true);
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
+        onGoogleLogin={handleGoogleLogin}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
@@ -724,144 +776,200 @@ export default function ChatGPTApp() {
         {/* Message Feed / Workspace */}
         <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin bg-white">
           <div className="max-w-3xl mx-auto space-y-6 pt-2">
-            {(messages.length > 0
-              ? messages
-              : [
-                  {
-                    id: 'sample-resume-overview',
-                    role: 'assistant' as const,
-                    content: `### How to Read This Resume
-
-1. **Core Identity** – Yashwanth is a Bangalore-based AI/ML enthusiast currently pursuing a B.Tech in AIML and actively researching at premier Indian institutes (IISc, IIIT-D).
-
-2. **Technical Breadth** – He combines software engineering (backend, Android, web) with deep AI expertise (LLMs, RAG, vision-language models).
-
-3. **Research & Product Focus** – Projects range from academic-level AI research (medical image analysis, bio-informatics) to production-oriented apps (misinformation detection, 3-D navigation).
-
-4. **Leadership & Impact** – Holds several campus leadership roles, demonstrating ability to organize large-scale events and drive policy (NEP-2020) adoption.
-
-5. **Recognition** – Consistently wins or places highly in national-level hackathons and poster competitions, indicating strong problem-solving and implementation skills.
-
-6. **Future Direction** – The resume signals a goal to build "production-ready AI solutions" using LLMs, agentic AI, and modern backend stacks—making him a strong candidate for AI-focused software engineering or research roles.
-
-**Bottom line**: Yashwanth VS presents a well-rounded profile that blends rigorous AI research, full-stack development, and proven leadership/hackathon success, positioning him for roles that require both deep technical AI knowledge and the ability to ship scalable, real-world applications.`
-                  }
-                ]
-            ).map((msg, idx, arr) => {
-              const isUser = msg.role === 'user';
-
-              return (
-                <div key={msg.id || idx} className="group text-sm leading-relaxed">
-                  {isUser ? (
-                    <div className="flex justify-end mb-4">
-                      <div className="bg-[#f4f4f4] text-[#111827] rounded-3xl px-5 py-3 max-w-[85%] text-[15px] font-normal leading-relaxed whitespace-pre-wrap">
-                        {msg.content}
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {/* Markdown rendered assistant message */}
-                      <div className="text-[#1F2937] leading-relaxed text-[15px]">
-                        <MarkdownRenderer content={msg.content} />
-                        {isStreaming && msg === arr[arr.length - 1] && (
-                          <span className="inline-block w-2 h-4 ml-1 bg-emerald-500 animate-pulse align-middle" />
-                        )}
-                      </div>
-
-                      {/* RAG Source Citation Chips if present */}
-                      {msg.sources && msg.sources.length > 0 && (
-                        <div className="mt-3 pt-2 border-t border-gray-100">
-                          <div className="text-[11px] font-semibold text-teal-700 mb-1.5 flex items-center gap-1.5">
-                            <FileTextIcon className="w-3.5 h-3.5" />
-                            <span>Sources Grounding ({msg.sources.length}):</span>
-                          </div>
-                          <div className="flex flex-wrap gap-2">
-                            {msg.sources.map((src, sIdx) => (
-                              <div
-                                key={sIdx}
-                                onClick={() =>
-                                  setExpandedSources((prev) => ({
-                                    ...prev,
-                                    [`${msg.id}-${sIdx}`]: !prev[`${msg.id}-${sIdx}`]
-                                  }))
-                                }
-                                className="cursor-pointer px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs text-teal-800 transition-colors"
-                              >
-                                <div className="font-mono text-[11px]">
-                                  📄 {src.filename} • p.{src.page}
-                                </div>
-                                {expandedSources[`${msg.id}-${sIdx}`] && (
-                                  <div className="mt-1.5 pt-1.5 border-t border-teal-200 text-[11px] text-gray-700 italic">
-                                    "{src.snippet}"
-                                  </div>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Action Bar Underneath Assistant Message matching screenshot */}
-                      <div className="flex items-center gap-2 pt-1 text-xs">
-                        <button
-                          onClick={() => handleCopyMessage(msg.content, msg.id)}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
-                          title="Copy message"
-                        >
-                          {copiedMsgId === msg.id ? (
-                            <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <CopyIcon className="w-3.5 h-3.5 text-gray-500" />
-                          )}
-                          <span>{copiedMsgId === msg.id ? 'Copied' : 'Copy'}</span>
-                        </button>
-
-                        <button
-                          onClick={() => handleToggleSpeak(msg.id, msg.content)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
-                            speakingMsgId === msg.id
-                              ? 'bg-emerald-50 border-emerald-300 text-emerald-700 animate-pulse'
-                              : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
-                          }`}
-                          title="Read aloud"
-                        >
-                          {speakingMsgId === msg.id ? (
-                            <StopIcon className="w-3.5 h-3.5 text-emerald-600" />
-                          ) : (
-                            <SpeakerIcon className="w-3.5 h-3.5 text-gray-500" />
-                          )}
-                          <span>{speakingMsgId === msg.id ? 'Stop' : 'Listen'}</span>
-                        </button>
-
-                        <button
-                          onClick={() => setIsDocsOpen(true)}
-                          className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
-                          title="Inspect Document Grounding and RAG X-Ray"
-                        >
-                          <SparklesIcon className="w-3.5 h-3.5 text-indigo-500" />
-                          <span>X-Ray RAG</span>
-                        </button>
-
-                        <button
-                          onClick={() => {
-                            const prevPrompt = arr[idx - 1]?.content || 'Summarize this resume';
-                            handleSendMessage(prevPrompt);
-                          }}
-                          className="p-1.5 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-600 hover:text-gray-900 transition-colors shadow-xs"
-                          title="Regenerate response"
-                        >
-                          <RegenerateIcon className="w-3.5 h-3.5 text-gray-500" />
-                        </button>
-                      </div>
-                    </div>
-                  )}
+            {messages.length === 0 ? (
+              /* Clean Active ChatGPT Home View (No hardcoded reference text) */
+              <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-4 my-auto">
+                <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center shadow-md mb-4">
+                  <SparklesIcon className="w-6 h-6 text-white" />
                 </div>
-              );
-            })}
+                <h1 className="text-2xl font-bold text-[#111827] mb-2 tracking-tight">
+                  What can I help with today?
+                </h1>
+                <p className="text-sm text-gray-500 max-w-md mb-8">
+                  Ask anything, ground answers with your data, create AI images, or start hands-free voice chat.
+                </p>
+
+                {/* 4 Interactive Feature Starter Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl text-left">
+                  <button
+                    onClick={() => handleSendMessage('/image A beautiful cinematic cyberpunk Bangalore skyline with rain and neon lights')}
+                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                  >
+                    <div className="text-xs font-semibold text-gray-900 group-hover:text-emerald-700 flex items-center gap-1.5 mb-1">
+                      <span>🎨</span>
+                      <span>Generate an AI image</span>
+                    </div>
+                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                      Cyberpunk Bangalore skyline in neon rain
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                  >
+                    <div className="text-xs font-semibold text-gray-900 group-hover:text-teal-700 flex items-center gap-1.5 mb-1">
+                      <span>📄</span>
+                      <span>Attach & Analyze Document</span>
+                    </div>
+                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                      Upload PDF, DOCX, or CSV data for RAG answers
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => handleSendMessage('Brainstorm 5 innovative startup ideas combining Agentic AI and healthcare in India')}
+                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                  >
+                    <div className="text-xs font-semibold text-gray-900 group-hover:text-indigo-700 flex items-center gap-1.5 mb-1">
+                      <span>💡</span>
+                      <span>Brainstorm ideas</span>
+                    </div>
+                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                      Agentic AI startup ideas in healthcare
+                    </div>
+                  </button>
+
+                  <button
+                    onClick={() => setIsVoiceModalOpen(true)}
+                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                  >
+                    <div className="text-xs font-semibold text-gray-900 group-hover:text-emerald-700 flex items-center gap-1.5 mb-1">
+                      <span>🎙️</span>
+                      <span>Interactive Voice Chat</span>
+                    </div>
+                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                      Hands-free fluid orb in Kannada or English
+                    </div>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              messages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+
+                return (
+                  <div key={msg.id || idx} className="group text-sm leading-relaxed">
+                    {isUser ? (
+                      <div className="flex justify-end mb-4">
+                        <div className="bg-[#f4f4f4] text-[#111827] rounded-3xl px-5 py-3 max-w-[85%] text-[15px] font-normal leading-relaxed whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {/* Markdown rendered assistant message */}
+                        <div className="text-[#1F2937] leading-relaxed text-[15px]">
+                          <MarkdownRenderer content={msg.content} />
+                          {isStreaming && msg === messages[messages.length - 1] && (
+                            <span className="inline-block w-2 h-4 ml-1 bg-emerald-500 animate-pulse align-middle" />
+                          )}
+                        </div>
+
+                        {/* RAG Source Citation Chips if present */}
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="mt-3 pt-2 border-t border-gray-100">
+                            <div className="text-[11px] font-semibold text-teal-700 mb-1.5 flex items-center gap-1.5">
+                              <FileTextIcon className="w-3.5 h-3.5" />
+                              <span>Sources Grounding ({msg.sources.length}):</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {msg.sources.map((src, sIdx) => (
+                                <div
+                                  key={sIdx}
+                                  onClick={() =>
+                                    setExpandedSources((prev) => ({
+                                      ...prev,
+                                      [`${msg.id}-${sIdx}`]: !prev[`${msg.id}-${sIdx}`]
+                                    }))
+                                  }
+                                  className="cursor-pointer px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs text-teal-800 transition-colors"
+                                >
+                                  <div className="font-mono text-[11px]">
+                                    📄 {src.filename} • p.{src.page}
+                                  </div>
+                                  {expandedSources[`${msg.id}-${sIdx}`] && (
+                                    <div className="mt-1.5 pt-1.5 border-t border-teal-200 text-[11px] text-gray-700 italic">
+                                      "{src.snippet}"
+                                    </div>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Bar Underneath Assistant Message */}
+                        <div className="flex items-center gap-2 pt-1 text-xs">
+                          <button
+                            onClick={() => handleCopyMessage(msg.content, msg.id)}
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                            title="Copy message"
+                          >
+                            {copiedMsgId === msg.id ? (
+                              <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <CopyIcon className="w-3.5 h-3.5 text-gray-500" />
+                            )}
+                            <span>{copiedMsgId === msg.id ? 'Copied' : 'Copy'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => handleToggleSpeak(msg.id, msg.content)}
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
+                              speakingMsgId === msg.id
+                                ? 'bg-emerald-50 border-emerald-300 text-emerald-700 animate-pulse'
+                                : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
+                            }`}
+                            title="Read aloud"
+                          >
+                            {speakingMsgId === msg.id ? (
+                              <StopIcon className="w-3.5 h-3.5 text-emerald-600" />
+                            ) : (
+                              <SpeakerIcon className="w-3.5 h-3.5 text-gray-500" />
+                            )}
+                            <span>{speakingMsgId === msg.id ? 'Stop' : 'Listen'}</span>
+                          </button>
+
+                          <button
+                            onClick={() => setIsDocsOpen(true)}
+                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                            title="Inspect Document Grounding and RAG X-Ray"
+                          >
+                            <SparklesIcon className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>X-Ray RAG</span>
+                          </button>
+
+                          <button
+                            onClick={() => {
+                              const prevPrompt = messages[idx - 1]?.content || 'Continue';
+                              handleSendMessage(prevPrompt);
+                            }}
+                            className="p-1.5 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-600 hover:text-gray-900 transition-colors shadow-xs"
+                            title="Regenerate response"
+                          >
+                            <RegenerateIcon className="w-3.5 h-3.5 text-gray-500" />
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })
+            )}
 
             <div ref={messagesEndRef} />
           </div>
         </div>
+
+        {/* Hidden File Input for Direct Upload */}
+        <input
+          type="file"
+          ref={fileInputRef}
+          onChange={handleDirectFileUpload}
+          className="hidden"
+          accept=".pdf,.docx,.txt,.csv,.json,.md"
+        />
 
         {/* Floating Stop Generating Control */}
         {isStreaming && (
@@ -879,7 +987,7 @@ export default function ChatGPTApp() {
         {/* Bottom Floating Attached Document & Floating Input Area */}
         <div className="w-full bg-white px-4 pb-4 pt-1">
           <div className="max-w-3xl mx-auto">
-            {/* Attached PDF document chip above the input bar */}
+            {/* Attached document chip above the input bar */}
             {attachedDoc && (
               <div className="flex items-center gap-3 bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2.5 shadow-xs max-w-sm mb-2.5 transition-all">
                 <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 flex-shrink-0">
@@ -889,13 +997,13 @@ export default function ChatGPTApp() {
                   <div className="text-xs font-semibold text-gray-800 truncate">
                     {attachedDoc.name}
                   </div>
-                  <div className="text-[10px] text-gray-400 font-medium tracking-wider">
-                    PDF DOCUMENT
+                  <div className="text-[10px] text-gray-400 font-medium tracking-wider uppercase">
+                    {attachedDoc.type || 'DOCUMENT'}
                   </div>
                 </div>
                 <button
                   onClick={() => setAttachedDoc(null)}
-                  className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
                   title="Remove document"
                 >
                   <CloseIcon className="w-3.5 h-3.5" />
@@ -906,9 +1014,9 @@ export default function ChatGPTApp() {
             {/* Floating Capsule Input Bar */}
             <div className="relative flex items-center bg-white rounded-full border border-gray-200 shadow-[0_2px_14px_rgba(0,0,0,0.06)] px-3.5 py-1.5 w-full focus-within:border-gray-300">
               <button
-                onClick={() => setIsDocsOpen(true)}
-                title="Attach file or document"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors flex-shrink-0"
+                onClick={() => fileInputRef.current?.click()}
+                title="Attach file or document (PDF, DOCX, TXT, CSV)"
+                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors flex-shrink-0 cursor-pointer"
               >
                 <PlusIcon className="w-5 h-5" />
               </button>

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   SparklesIcon, PlusIcon, SearchIcon, PinIcon,
   EditIcon, TrashIcon, SettingsIcon, FileTextIcon, LogOutIcon, CheckIcon, CloseIcon,
-  NewChatPenIcon, SidebarCollapseIcon
+  NewChatPenIcon, SidebarCollapseIcon, GoogleIcon
 } from './Icons';
 
 export interface ChatItem {
@@ -27,6 +27,7 @@ interface SidebarProps {
   onOpenDocuments: () => void;
   onLogout: () => void;
   onOpenAuth: () => void;
+  onGoogleLogin?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
 }
@@ -44,6 +45,7 @@ export function Sidebar({
   onOpenDocuments,
   onLogout,
   onOpenAuth,
+  onGoogleLogin,
   isOpenMobile,
   onCloseMobile
 }: SidebarProps) {
@@ -270,12 +272,22 @@ export function Sidebar({
           )}
         </div>
 
-        {/* Bottom User Profile Section */}
+        {/* Bottom User Profile & Google Login Section */}
         <div className="p-3 border-t border-gray-200/80 bg-[#F9F9F9] relative">
+          {/* Quick Google Sign In Pill */}
+          <button
+            onClick={onGoogleLogin || onOpenAuth}
+            className="w-full mb-2.5 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold transition-all shadow-xs group"
+            title="Continue with Google Account"
+          >
+            <GoogleIcon className="w-4 h-4" />
+            <span>Continue with Google</span>
+          </button>
+
           {user ? (
             <div className="flex items-center justify-between">
               {userMenuOpen && (
-                <div className="absolute bottom-14 left-2 right-2 bg-white border border-gray-200 rounded-xl shadow-xl p-1.5 space-y-1 z-50 text-xs">
+                <div className="absolute bottom-16 left-2 right-2 bg-white border border-gray-200 rounded-xl shadow-xl p-1.5 space-y-1 z-50 text-xs">
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -296,6 +308,18 @@ export function Sidebar({
                     <FileTextIcon className="w-4 h-4 text-teal-600" />
                     <span>My Documents (RAG)</span>
                   </button>
+                  {onGoogleLogin && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onGoogleLogin();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors"
+                    >
+                      <GoogleIcon className="w-4 h-4" />
+                      <span>Switch to Google Account</span>
+                    </button>
+                  )}
                   <div className="border-t border-gray-100 my-1" />
                   <button
                     onClick={() => {
@@ -315,9 +339,17 @@ export function Sidebar({
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 className="flex items-center gap-2.5 overflow-hidden cursor-pointer flex-1 group"
               >
-                <div className="w-7 h-7 rounded-full bg-[#EA580C] text-white flex items-center justify-center font-bold text-xs uppercase flex-shrink-0 shadow-xs">
-                  {user.display_name ? user.display_name.charAt(0) : 'D'}
-                </div>
+                {user.photo_url ? (
+                  <img
+                    src={user.photo_url}
+                    alt={user.display_name}
+                    className="w-7 h-7 rounded-full object-cover flex-shrink-0 shadow-xs border border-gray-200"
+                  />
+                ) : (
+                  <div className="w-7 h-7 rounded-full bg-[#EA580C] text-white flex items-center justify-center font-bold text-xs uppercase flex-shrink-0 shadow-xs">
+                    {user.display_name ? user.display_name.charAt(0) : 'D'}
+                  </div>
+                )}
                 <div className="overflow-hidden">
                   <div className="text-[13px] font-semibold text-[#111827] truncate group-hover:text-emerald-700 transition-colors">
                     {user.display_name || 'Divya Gadwal'}
@@ -346,9 +378,9 @@ export function Sidebar({
           ) : (
             <button
               onClick={onOpenAuth}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-medium text-xs transition-colors shadow-xs"
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-medium text-xs transition-colors shadow-xs"
             >
-              <span>Sign In / Register</span>
+              <span>Email Sign In / Register</span>
             </button>
           )}
         </div>
