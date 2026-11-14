@@ -5,10 +5,11 @@ interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onLoginSuccess: (token: string, user: any) => void;
+  onOpenGoogleAuth?: () => void;
   apiUrl: string;
 }
 
-export function AuthModal({ isOpen, onClose, onLoginSuccess, apiUrl }: AuthModalProps) {
+export function AuthModal({ isOpen, onClose, onLoginSuccess, onOpenGoogleAuth, apiUrl }: AuthModalProps) {
   const [mode, setMode] = useState<'login' | 'signup' | 'forgot'>('login');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -158,7 +159,14 @@ export function AuthModal({ isOpen, onClose, onLoginSuccess, apiUrl }: AuthModal
         {mode !== 'forgot' && (
           <div className="mb-4">
             <button
-              onClick={handleGoogleDemo}
+              onClick={() => {
+                if (onOpenGoogleAuth) {
+                  onClose();
+                  onOpenGoogleAuth();
+                } else {
+                  handleGoogleDemo();
+                }
+              }}
               disabled={loading}
               className="w-full flex items-center justify-center gap-3 py-2.5 px-4 rounded-xl border border-[rgba(255,255,255,0.15)] bg-[rgba(255,255,255,0.05)] hover:bg-[rgba(255,255,255,0.1)] transition-all font-medium text-sm"
             >

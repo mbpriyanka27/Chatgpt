@@ -1054,10 +1054,23 @@ export default function ChatGPTApp() {
               />
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
+                {/* HD Image Tool Button */}
+                <button
+                  onClick={() => {
+                    setInputPrompt('/image ultra HD, 8k resolution, cinematic lighting: ');
+                    textareaRef.current?.focus();
+                  }}
+                  title="Generate 8K HD Image"
+                  className="px-2.5 py-1 rounded-full text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <span className="text-xs">🎨</span>
+                  <span className="hidden sm:inline">HD Image</span>
+                </button>
+
                 <button
                   onClick={() => setIsVoiceModalOpen(true)}
                   title="ChatGPT Voice Mode (Interactive Fluid Circle)"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
                 >
                   <MicIcon className="w-4 h-4" />
                 </button>
@@ -1132,6 +1145,7 @@ export default function ChatGPTApp() {
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}
+        onOpenGoogleAuth={() => setIsGoogleAuthOpen(true)}
         onLoginSuccess={(tok, usr) => {
           setToken(tok);
           setUser(usr);
