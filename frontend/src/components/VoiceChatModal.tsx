@@ -8,7 +8,7 @@ interface VoiceChatModalProps {
   token: string | null;
   chatId: string | null;
   selectedModel: string;
-  onBackgroundMessage?: (userText: string, asstText: string, isFinished: boolean) => void;
+  onBackgroundMessage?: (userText: string, asstText: string, isFinished: boolean, newChatId?: string) => void;
 }
 
 const SUPPORTED_LANGUAGES = [
@@ -61,6 +61,7 @@ export function VoiceChatModal({
   // Prevents Chrome from garbage-collecting utterances before onend fires!
   const activeUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const silenceTimerRef = useRef<any>(null);
+  const currentChatIdRef = useRef<string | null>(chatId);
 
   // Initialize SpeechSynthesis on mount
   useEffect(() => {
@@ -282,14 +283,18 @@ export function VoiceChatModal({
             if (line.startsWith('data: ')) {
               try {
                 const payload = JSON.parse(line.slice(6));
-                if (payload.event === 'chunk') {
+                if (payload.event === 'start') {
+                  if (payload.chat_id) {
+                    currentChatIdRef.current = payload.chat_id;
+                  }
+                } else if (payload.event === 'chunk') {
                   const tokenText = payload.text;
                   sentenceBuffer += tokenText;
                   fullResponseAccumulated += tokenText;
                   setAiSpokenText(fullResponseAccumulated);
 
                   if (onBackgroundMessage) {
-                    onBackgroundMessage(query, fullResponseAccumulated, false);
+                    onBackgroundMessage(query, fullResponseAccumulated, false, currentChatIdRef.current || undefined);
                   }
 
                   // Fraction of second trigger: Speak as soon as first 3-4 words or punctuation arrives
@@ -323,7 +328,7 @@ export function VoiceChatModal({
         }
 
         if (onBackgroundMessage) {
-          onBackgroundMessage(query, fullResponseAccumulated, true);
+          onBackgroundMessage(query, fullResponseAccumulated, true, currentChatIdRef.current || undefined);
         }
       }
     } catch (err: any) {
@@ -413,6 +418,7 @@ export function VoiceChatModal({
     activeUtterancesRef.current.push(utterance);
 
     const onUtteranceFinish = () => {
+      clearTimeout(safetyTimer);
       // Remove from retention ref
       activeUtterancesRef.current = activeUtterancesRef.current.filter((u) => u !== utterance);
       speechQueueCountRef.current = Math.max(0, speechQueueCountRef.current - 1);
@@ -423,13 +429,17 @@ export function VoiceChatModal({
       }
     };
 
+    const safetyTimer = setTimeout(() => {
+      onUtteranceFinish();
+    }, 8000);
+
     utterance.onend = onUtteranceFinish;
     utterance.onerror = onUtteranceFinish;
 
     // Chrome autoplay policy: resume synthesis if suspended
-    if (synthRef.current.paused) {
+    try {
       synthRef.current.resume();
-    }
+    } catch (e) {}
 
     synthRef.current.speak(utterance);
   };
@@ -463,8 +473,10 @@ export function VoiceChatModal({
         position: 'fixed',
         inset: 0,
         zIndex: 99999,
-        backgroundColor: '#07080e',
-        color: '#ffffff',
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        backdropFilter: 'blur(32px)',
+        WebkitBackdropFilter: 'blur(32px)',
+        color: '#111827',
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
@@ -497,30 +509,30 @@ export function VoiceChatModal({
         }
         .fluid-orb-listening {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #34d399 28%, #059669 60%, #064e3b 100%);
-          box-shadow: 0 0 75px rgba(16, 185, 129, 0.6), inset 0 0 25px rgba(255, 255, 255, 0.4);
+          box-shadow: 0 10px 65px rgba(16, 185, 129, 0.45), inset 0 0 25px rgba(255, 255, 255, 0.5);
           animation: orbMorph 4.5s ease-in-out infinite;
         }
         .fluid-orb-thinking {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #c084fc 30%, #7c3aed 65%, #312e81 100%);
-          box-shadow: 0 0 80px rgba(168, 85, 247, 0.65), inset 0 0 25px rgba(255, 255, 255, 0.4);
+          box-shadow: 0 10px 70px rgba(168, 85, 247, 0.45), inset 0 0 25px rgba(255, 255, 255, 0.5);
           animation: orbMorph 3s ease-in-out infinite;
         }
         .fluid-orb-speaking {
           background: radial-gradient(circle at 35% 35%, #ffffff 0%, #38bdf8 25%, #2563eb 55%, #1e1b4b 100%);
-          box-shadow: 0 0 95px rgba(56, 189, 248, 0.75), inset 0 0 30px rgba(255, 255, 255, 0.5);
+          box-shadow: 0 10px 80px rgba(56, 189, 248, 0.55), inset 0 0 30px rgba(255, 255, 255, 0.5);
           animation: orbMorph 3.5s ease-in-out infinite;
         }
         .fluid-orb-idle {
           background: radial-gradient(circle at 35% 35%, #94a3b8 0%, #475569 50%, #1e293b 100%);
-          box-shadow: 0 0 30px rgba(100, 116, 139, 0.3);
+          box-shadow: 0 6px 30px rgba(100, 116, 139, 0.25);
         }
       `}</style>
 
-      {/* Top Header: Model & Language Selector (Kannada Included) */}
+      {/* Top Header: Model & Language Selector */}
       <div style={{ width: '100%', maxWidth: '640px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: '#10b981', boxShadow: '0 0 8px #10b981' }} />
-          <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#9ca3af' }}>
+          <span style={{ fontSize: '13px', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#4b5563' }}>
             ChatGPT Voice • Turn {turnCount}
           </span>
         </div>
@@ -540,10 +552,10 @@ export function VoiceChatModal({
               setTimeout(() => startListening(), 100);
             }}
             style={{
-              backgroundColor: 'rgba(255,255,255,0.08)',
-              border: '1px solid rgba(255,255,255,0.15)',
+              backgroundColor: '#ffffff',
+              border: '1px solid #d1d5db',
               borderRadius: '12px',
-              color: '#ffffff',
+              color: '#111827',
               fontSize: '11px',
               padding: '6px 10px',
               outline: 'none',
@@ -551,7 +563,7 @@ export function VoiceChatModal({
             }}
           >
             {SUPPORTED_LANGUAGES.map((lang) => (
-              <option key={lang.code} value={lang.code} style={{ backgroundColor: '#181824', color: '#ffffff' }}>
+              <option key={lang.code} value={lang.code} style={{ backgroundColor: '#ffffff', color: '#111827' }}>
                 {lang.name}
               </option>
             ))}
@@ -569,9 +581,9 @@ export function VoiceChatModal({
             style={{
               padding: '8px',
               borderRadius: '50%',
-              backgroundColor: 'rgba(255,255,255,0.1)',
-              border: 'none',
-              color: '#ffffff',
+              backgroundColor: '#f3f4f6',
+              border: '1px solid #e5e7eb',
+              color: '#374151',
               cursor: 'pointer',
               display: 'flex',
               alignItems: 'center',
@@ -604,14 +616,15 @@ export function VoiceChatModal({
               setTimeout(() => startListening(), 100);
             }}
             style={{
-              padding: '4px 12px',
+              padding: '5px 14px',
               borderRadius: '16px',
               fontSize: '11px',
-              fontWeight: 500,
+              fontWeight: 600,
               cursor: 'pointer',
-              border: selectedLang === item.code ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.12)',
-              backgroundColor: selectedLang === item.code ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255,255,255,0.05)',
-              color: selectedLang === item.code ? '#38bdf8' : '#94a3b8',
+              border: selectedLang === item.code ? '1px solid #10b981' : '1px solid #e5e7eb',
+              backgroundColor: selectedLang === item.code ? '#ecfdf5' : '#ffffff',
+              color: selectedLang === item.code ? '#059669' : '#4b5563',
+              boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
               transition: 'all 0.2s ease'
             }}
           >
@@ -626,7 +639,7 @@ export function VoiceChatModal({
         {/* Click to interrupt / talk */}
         <div
           onClick={handleInterruptOrTap}
-          style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '310px', height: '310px' }}
+          style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', width: '320px', height: '320px' }}
         >
           {/* Expanding Acoustic Waves */}
           {status === 'speaking' && (
@@ -637,7 +650,7 @@ export function VoiceChatModal({
                   width: '320px',
                   height: '320px',
                   borderRadius: '50%',
-                  border: '2px solid rgba(56, 189, 248, 0.45)',
+                  border: '2px solid rgba(56, 189, 248, 0.55)',
                   animation: 'rippleRing 2s ease-out infinite'
                 }}
               />
@@ -647,7 +660,7 @@ export function VoiceChatModal({
                   width: '380px',
                   height: '380px',
                   borderRadius: '50%',
-                  border: '1px solid rgba(37, 99, 235, 0.3)',
+                  border: '1px solid rgba(37, 99, 235, 0.4)',
                   animation: 'rippleRing 2s ease-out 0.6s infinite'
                 }}
               />
@@ -661,7 +674,7 @@ export function VoiceChatModal({
                 width: '330px',
                 height: '330px',
                 borderRadius: '50%',
-                border: '2px solid rgba(16, 185, 129, 0.4)',
+                border: '2px solid rgba(16, 185, 129, 0.5)',
                 animation: 'rippleRing 2.5s ease-out infinite'
               }}
             />
@@ -679,8 +692,8 @@ export function VoiceChatModal({
                 : 'fluid-orb-idle'
             }
             style={{
-              width: '240px',
-              height: '240px',
+              width: '260px',
+              height: '260px',
               position: 'relative',
               display: 'flex',
               alignItems: 'center',
@@ -715,8 +728,9 @@ export function VoiceChatModal({
             marginTop: '28px',
             padding: '7px 20px',
             borderRadius: '24px',
-            backgroundColor: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(255,255,255,0.12)',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
             display: 'flex',
             alignItems: 'center',
             gap: '8px'
@@ -731,13 +745,13 @@ export function VoiceChatModal({
                 status === 'listening'
                   ? '#10b981'
                   : status === 'speaking'
-                  ? '#38bdf8'
+                  ? '#0284c7'
                   : status === 'thinking'
-                  ? '#c084fc'
+                  ? '#9333ea'
                   : '#64748b'
             }}
           />
-          <span style={{ fontSize: '12px', fontWeight: 500, color: '#e2e8f0', letterSpacing: '0.02em' }}>
+          <span style={{ fontSize: '12px', fontWeight: 600, color: '#1e293b', letterSpacing: '0.02em' }}>
             {status === 'listening' && (
               selectedLang === 'kn-IN'
                 ? `● Listening in ಕನ್ನಡ (Turn ${turnCount})... Speak now`
@@ -745,7 +759,7 @@ export function VoiceChatModal({
                 ? `● Listening in हिन्दी (Turn ${turnCount})... Speak now`
                 : selectedLang === 'en-US'
                 ? `● Listening in English (Turn ${turnCount})... Speak now`
-                : `● Listening (Auto Turn ${turnCount})... Speak in English, Kannada or any language`
+                : `● Listening (Turn ${turnCount})... Speak in English, Kannada or Hindi`
             )}
             {status === 'thinking' && '● Thinking...'}
             {status === 'speaking' && '● Speaking answer... (Tap orb to interrupt)'}
@@ -756,11 +770,11 @@ export function VoiceChatModal({
         {/* Live Conversation Transcript */}
         <div style={{ marginTop: '20px', minHeight: '60px', textAlign: 'center', padding: '0 16px', maxWidth: '440px' }}>
           {userTranscript ? (
-            <p style={{ fontSize: '15px', color: '#f1f5f9', fontStyle: 'italic', margin: 0 }}>
+            <p style={{ fontSize: '15px', color: '#0f172a', fontWeight: 600, fontStyle: 'italic', margin: 0 }}>
               &ldquo;{userTranscript}&rdquo;
             </p>
           ) : aiSpokenText && status === 'speaking' ? (
-            <p style={{ fontSize: '14px', color: '#7dd3fc', margin: 0, lineHeight: 1.4 }}>
+            <p style={{ fontSize: '14px', color: '#0369a1', margin: 0, lineHeight: 1.4 }}>
               {aiSpokenText}
             </p>
           ) : (
@@ -781,14 +795,14 @@ export function VoiceChatModal({
           style={{
             padding: '16px',
             borderRadius: '50%',
-            backgroundColor: isMuted ? 'rgba(239, 68, 68, 0.25)' : 'rgba(255,255,255,0.1)',
-            border: isMuted ? '1px solid rgba(239, 68, 68, 0.5)' : '1px solid rgba(255,255,255,0.15)',
-            color: isMuted ? '#f87171' : '#ffffff',
+            backgroundColor: isMuted ? '#fee2e2' : '#ffffff',
+            border: isMuted ? '1px solid #f87171' : '1px solid #e2e8f0',
+            color: isMuted ? '#dc2626' : '#1e293b',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
           }}
           title={isMuted ? 'Unmute microphone' : 'Mute microphone'}
         >
@@ -801,14 +815,14 @@ export function VoiceChatModal({
           style={{
             padding: '16px',
             borderRadius: '50%',
-            backgroundColor: status === 'speaking' ? 'rgba(245, 158, 11, 0.25)' : 'rgba(255,255,255,0.1)',
-            border: status === 'speaking' ? '1px solid rgba(245, 158, 11, 0.5)' : '1px solid rgba(255,255,255,0.15)',
-            color: status === 'speaking' ? '#fbbf24' : '#ffffff',
+            backgroundColor: status === 'speaking' ? '#fef3c7' : '#ffffff',
+            border: status === 'speaking' ? '1px solid #f59e0b' : '1px solid #e2e8f0',
+            color: status === 'speaking' ? '#b45309' : '#1e293b',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(0,0,0,0.4)'
+            boxShadow: '0 4px 16px rgba(0,0,0,0.08)'
           }}
           title={status === 'speaking' ? 'Interrupt response' : 'Tap to speak next question'}
         >
@@ -827,14 +841,14 @@ export function VoiceChatModal({
           style={{
             padding: '16px',
             borderRadius: '50%',
-            backgroundColor: '#dc2626',
+            backgroundColor: '#ef4444',
             border: 'none',
             color: '#ffffff',
             cursor: 'pointer',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 20px rgba(220, 38, 38, 0.5)'
+            boxShadow: '0 4px 20px rgba(239, 68, 68, 0.4)'
           }}
           title="End Voice Call"
         >

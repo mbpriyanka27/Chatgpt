@@ -134,8 +134,13 @@ async def generate_image(
         except Exception as e:
             print(f"DALL-E generation failed, falling back to Flux: {e}")
 
-    # Option 2: Pollinations Flux Engine (High fidelity, sub-2s, free)
-    encoded_prompt = urllib.parse.quote(prompt_for_gen.strip())
+    # Option 2: Pollinations Flux Engine (High fidelity HD generation, sub-2s, free)
+    # For HD Quality, automatically enrich prompt with high-resolution visual modifiers
+    hd_prompt = prompt_for_gen
+    if not any(w in prompt_for_gen.lower() for w in ["8k", "hd", "4k", "photorealistic", "hyperrealistic", "masterpiece"]):
+        hd_prompt = f"{prompt_for_gen}, high resolution, 8k, photorealistic, sharp focus, masterpiece, cinematic lighting, ultra-detailed HD quality"
+
+    encoded_prompt = urllib.parse.quote(hd_prompt.strip())
     seed = int(time.time() * 1000) % 10000000
     pollinations_url = (
         f"https://image.pollinations.ai/prompt/{encoded_prompt}"

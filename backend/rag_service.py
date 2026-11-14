@@ -2,7 +2,7 @@ import os
 import json
 import math
 import re
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 from pathlib import Path
 import pypdf
 import docx
@@ -130,17 +130,28 @@ class UserVectorStore:
         self.chunks = [c for c in self.chunks if c["filename"] != clean_name]
         self._save_index()
 
-    def search(self, query: str, top_k: int = 4) -> List[Dict[str, Any]]:
-        """Performs lexical and semantic scoring against indexed document chunks."""
+    def search(self, query: str, top_k: int = 5, target_filename: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Performs lexical and semantic scoring against indexed document chunks.
+        If query is general (e.g. summarize, what is this, analyze) or matches are few,
+        falls back to key chunks of the target or latest document to guarantee full context grounding.
+        """
         if not self.chunks:
             return []
 
-        query_terms = re.findall(r'\w+', query.lower())
-        if not query_terms:
-            return []
+        # Filter to target document if specified
+        target_chunks = self.chunks
+        if target_filename:
+            clean_target = sanitize_filename(target_filename)
+            matched_target = [c for c in self.chunks if c["filename"] == clean_target or clean_target in c["filename"]]
+            if matched_target:
+                target_chunks = matched_target
+
+        query_lower = query.lower()
+        query_terms = re.findall(r'\w+', query_lower)
 
         scored_chunks = []
-        for chunk in self.chunks:
+        for chunk in target_chunks:
             chunk_terms = re.findall(r'\w+', chunk["text"].lower())
             chunk_len = len(chunk_terms) or 1
             
@@ -156,5 +167,22 @@ class UserVectorStore:
 
         scored_chunks.sort(key=lambda x: x[0], reverse=True)
         top_matches = [item[1] for item in scored_chunks[:top_k]]
-        return top_matches
+
+        # Fallback for general queries: "summarize", "analyze", "what does this document say", etc.
+        # Or if top_matches is empty: return the first chunks of the target or latest document!
+        is_general_query = any(k in query_lower for k in [
+            "summarize", "summary", "explain", "what is", "tell me about", "analyze", 
+            "overview", "review", "read", "points", "takeaways", "details", "resume", "document", "file"
+        ])
+
+        if len(top_matches) == 0 or is_general_query:
+            fallback = target_chunks[:top_k]
+            # Combine without duplicates
+            seen_ids = set(c["id"] for c in top_matches)
+            for c in fallback:
+                if c["id"] not in seen_ids:
+                    top_matches.append(c)
+                    seen_ids.add(c["id"])
+
+        return top_matches[:top_k]
 

@@ -376,12 +376,23 @@ export function Sidebar({
               </div>
             </div>
           ) : (
-            <button
-              onClick={onOpenAuth}
-              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-medium text-xs transition-colors shadow-xs"
-            >
-              <span>Email Sign In / Register</span>
-            </button>
+            <div className="space-y-2">
+              {onGoogleLogin && (
+                <button
+                  onClick={onGoogleLogin}
+                  className="w-full flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold text-xs transition-colors shadow-xs"
+                >
+                  <GoogleIcon className="w-4 h-4" />
+                  <span>Continue with Google</span>
+                </button>
+              )}
+              <button
+                onClick={onOpenAuth}
+                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-medium text-xs transition-colors shadow-xs"
+              >
+                <span>Email Sign In / Register</span>
+              </button>
+            </div>
           )}
         </div>
       </aside>

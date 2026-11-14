@@ -95,6 +95,7 @@ class ChatStreamRequest(BaseModel):
     chat_id: Optional[str] = None
     prompt: str
     use_rag: bool = False
+    attached_document: Optional[str] = None
     model: Optional[str] = None
     temperature: Optional[float] = None
     max_tokens: Optional[int] = 1024
@@ -442,16 +443,22 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
         else:
             llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
     
-    # 4. Handle RAG document injection if requested
+    # 4. Handle RAG document injection if requested or document attached
     sources = []
     rag_context = ""
-    if req.use_rag:
+    target_doc = req.attached_document
+    if req.use_rag or target_doc:
         vstore = UserVectorStore(user.id)
-        matches = vstore.search(req.prompt, top_k=3)
+        matches = vstore.search(req.prompt, top_k=5, target_filename=target_doc)
         if matches:
             sources = [{"filename": m["filename"], "page": m["page"], "snippet": m["text"][:150] + "..."} for m in matches]
             docs_text = "\n\n".join([f"Source: {m['filename']} (Page {m['page']}):\n{m['text']}" for m in matches])
-            rag_context = f"\n\nContext from user uploaded documents:\n{docs_text}\n\nWhen answering, cite the document name and page."
+            rag_context = (
+                f"\n\n--- ATTACHED DOCUMENT CONTEXT ({target_doc or matches[0]['filename']}) ---\n"
+                f"{docs_text}\n"
+                f"--- END DOCUMENT CONTEXT ---\n\n"
+                f"CRITICAL INSTRUCTIONS: You have direct access to the user's uploaded document above. Respond directly, thoroughly, and factually based on this document. If asked to summarize, analyze, or answer specific questions, use the extracted text above."
+            )
             llm_messages[0]["content"] += rag_context
 
     if req.is_voice_mode:

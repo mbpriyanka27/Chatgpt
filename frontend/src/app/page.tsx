@@ -14,6 +14,7 @@ import { AuthModal } from '../components/AuthModal';
 import { DocumentManagerModal } from '../components/DocumentManagerModal';
 import { ProfileSettingsModal } from '../components/ProfileSettingsModal';
 import { VoiceChatModal } from '../components/VoiceChatModal';
+import { GoogleAuthModal } from '../components/GoogleAuthModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -47,6 +48,7 @@ export default function ChatGPTApp() {
 
   // Modals & Drawers
   const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [isGoogleAuthOpen, setIsGoogleAuthOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -354,7 +356,8 @@ export default function ChatGPTApp() {
         body: JSON.stringify({
           chat_id: activeChatId,
           prompt: text,
-          use_rag: useRag,
+          use_rag: useRag || !!attachedDoc,
+          attached_document: attachedDoc ? attachedDoc.name : undefined,
           model: selectedModel,
           temperature: user?.temperature || 0.7,
           is_image_request: isImgReq,
@@ -377,7 +380,8 @@ export default function ChatGPTApp() {
             body: JSON.stringify({
               chat_id: activeChatId,
               prompt: text,
-              use_rag: useRag,
+              use_rag: useRag || !!attachedDoc,
+              attached_document: attachedDoc ? attachedDoc.name : undefined,
               model: selectedModel,
               temperature: user?.temperature || 0.7,
               is_image_request: isImgReq,
@@ -727,7 +731,7 @@ export default function ChatGPTApp() {
           setIsAuthOpen(true);
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
-        onGoogleLogin={handleGoogleLogin}
+        onGoogleLogin={() => setIsGoogleAuthOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
       />
@@ -744,9 +748,22 @@ export default function ChatGPTApp() {
               <MenuIcon className="w-5 h-5" />
             </button>
 
-            {/* Pill Group: Chat and + Work */}
+            {/* Pill Group: Chat, + Work, and HD Image */}
             <button className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#ECECF1] text-[#0D0D0D] hover:bg-[#E2E2E8] transition-colors">
               Chat
+            </button>
+
+            <button
+              onClick={() => {
+                setInputPrompt('/image ultra HD 8k cinematic masterpiece, photorealistic: ');
+                textareaRef.current?.focus();
+              }}
+              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors flex items-center gap-1.5 shadow-xs"
+              title="Create high-definition 8K AI image"
+            >
+              <span>🎨</span>
+              <span>HD Image</span>
+              <span className="text-[9px] bg-purple-200 text-purple-900 px-1 rounded font-bold">8K</span>
             </button>
 
             <button
@@ -1038,13 +1055,9 @@ export default function ChatGPTApp() {
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
-                  onClick={handleToggleMic}
-                  title={isListeningMic ? 'Stop microphone' : 'Voice input'}
-                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                    isListeningMic
-                      ? 'bg-red-50 text-red-600 animate-pulse'
-                      : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
-                  }`}
+                  onClick={() => setIsVoiceModalOpen(true)}
+                  title="ChatGPT Voice Mode (Interactive Fluid Circle)"
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
                 >
                   <MicIcon className="w-4 h-4" />
                 </button>
@@ -1075,20 +1088,44 @@ export default function ChatGPTApp() {
         token={token}
         chatId={activeChatId}
         selectedModel={selectedModel}
-        onBackgroundMessage={(userText, asstText, isFinished) => {
-          setMessages((prev) => {
-            const filtered = prev.filter((m) => !m.id.startsWith('voice-live-'));
-            return [
-              ...filtered,
-              { id: 'voice-live-u', role: 'user', content: userText },
-              { id: 'voice-live-a', role: 'assistant', content: asstText }
-            ];
-          });
+        onBackgroundMessage={(userText, asstText, isFinished, newChatId) => {
+          if (newChatId && !activeChatId) {
+            setActiveChatId(newChatId);
+          }
           if (isFinished) {
+            setMessages((prev) => [
+              ...prev.filter((m) => !m.id.startsWith('voice-live-')),
+              { id: 'user-v-' + Date.now(), role: 'user', content: userText, created_at: new Date().toISOString() },
+              { id: 'asst-v-' + Date.now(), role: 'assistant', content: asstText, created_at: new Date().toISOString() }
+            ]);
             loadChats();
-            if (activeChatId) loadChatMessages(activeChatId);
+            if (newChatId || activeChatId) {
+              loadChatMessages(newChatId || activeChatId!);
+            }
+          } else {
+            setMessages((prev) => {
+              const filtered = prev.filter((m) => !m.id.startsWith('voice-live-'));
+              return [
+                ...filtered,
+                { id: 'voice-live-u', role: 'user', content: userText },
+                { id: 'voice-live-a', role: 'assistant', content: asstText }
+              ];
+            });
           }
         }}
+      />
+
+      {/* Google Sign-In Modal */}
+      <GoogleAuthModal
+        isOpen={isGoogleAuthOpen}
+        onClose={() => setIsGoogleAuthOpen(false)}
+        onSuccess={(tok, usr) => {
+          setToken(tok);
+          setUser(usr);
+          loadChats();
+          loadDocCount();
+        }}
+        apiUrl={API_BASE_URL}
       />
 
       {/* Modals */}
