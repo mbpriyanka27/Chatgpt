@@ -748,27 +748,14 @@ export default function ChatGPTApp() {
               <MenuIcon className="w-5 h-5" />
             </button>
 
-            {/* Pill Group: Chat, + Work, and HD Image */}
+            {/* Pill Group: Chat and + Work */}
             <button className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#ECECF1] text-[#0D0D0D] hover:bg-[#E2E2E8] transition-colors">
               Chat
             </button>
 
             <button
-              onClick={() => {
-                setInputPrompt('/image ultra HD 8k cinematic masterpiece, photorealistic: ');
-                textareaRef.current?.focus();
-              }}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 transition-colors flex items-center gap-1.5 shadow-xs"
-              title="Create high-definition 8K AI image"
-            >
-              <span>🎨</span>
-              <span>HD Image</span>
-              <span className="text-[9px] bg-purple-200 text-purple-900 px-1 rounded font-bold">8K</span>
-            </button>
-
-            <button
               onClick={() => setIsDocsOpen(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-1 shadow-xs"
+              className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
               title="Ground chat with uploaded documents & workspace files"
             >
               <span className="text-gray-500 font-bold">+</span>
@@ -786,6 +773,15 @@ export default function ChatGPTApp() {
               title="Settings & Model Selection"
             >
               <SlidersIcon className="w-4 h-4" />
+            </button>
+
+            {/* New Chat Top Right Shortcut */}
+            <button
+              onClick={handleNewChat}
+              className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              title="New Chat"
+            >
+              <PlusIcon className="w-4 h-4" />
             </button>
           </div>
         </header>
@@ -1054,19 +1050,6 @@ export default function ChatGPTApp() {
               />
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
-                {/* HD Image Tool Button */}
-                <button
-                  onClick={() => {
-                    setInputPrompt('/image ultra HD, 8k resolution, cinematic lighting: ');
-                    textareaRef.current?.focus();
-                  }}
-                  title="Generate 8K HD Image"
-                  className="px-2.5 py-1 rounded-full text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
-                >
-                  <span className="text-xs">🎨</span>
-                  <span className="hidden sm:inline">HD Image</span>
-                </button>
-
                 <button
                   onClick={() => setIsVoiceModalOpen(true)}
                   title="ChatGPT Voice Mode (Interactive Fluid Circle)"
@@ -1079,7 +1062,7 @@ export default function ChatGPTApp() {
                 <button
                   onClick={() => setIsVoiceModalOpen(true)}
                   title="ChatGPT Voice Mode (Interactive Fluid Circle)"
-                  className="w-9 h-9 rounded-full bg-[#10A37F] hover:bg-[#0D8A6C] text-white flex items-center justify-center shadow-sm transition-transform active:scale-95"
+                  className="w-9 h-9 rounded-full bg-[#10A37F] hover:bg-[#0D8A6C] text-white flex items-center justify-center shadow-sm transition-transform active:scale-95 cursor-pointer"
                 >
                   <VoiceWaveIcon className="w-5 h-5 text-white" />
                 </button>

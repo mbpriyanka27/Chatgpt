@@ -492,6 +492,9 @@ export function VoiceChatModal({
       stopSpeaking();
       if (abortControllerRef.current) abortControllerRef.current.abort();
       reArmForNextTurn();
+    } else if (status === 'idle') {
+      setIsMuted(false);
+      startListening();
     } else if (status === 'listening') {
       toggleMute();
     }
