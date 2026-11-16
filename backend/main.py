@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 import datetime
+from urllib.parse import quote
 from typing import List, Optional
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form, status, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -187,19 +188,37 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @app.post("/api/auth/google")
 def google_auth(req: GoogleLoginRequest, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == req.email.lower()).first()
+    email_clean = (req.email or "").strip().lower()
+    if not email_clean or "@" not in email_clean:
+        raise HTTPException(status_code=400, detail="A valid Google email address is required.")
+        
+    display_name = (req.display_name or "").strip()
+    if not display_name:
+        display_name = email_clean.split("@")[0].replace(".", " ").title()
+        
+    user = db.query(User).filter(User.email == email_clean).first()
+    is_new = False
+    
+    photo = req.photo_url
+    if not photo:
+        photo = f"https://api.dicebear.com/7.x/initials/svg?seed={quote(display_name)}&backgroundColor=0284c7,ea580c,16a34a,7c3aed"
+        
     if not user:
+        is_new = True
         user = User(
-            email=req.email.lower(),
-            display_name=req.display_name,
-            photo_url=req.photo_url or "https://lh3.googleusercontent.com/a/default-user",
-            provider="google"
+            email=email_clean,
+            display_name=display_name,
+            photo_url=photo,
+            provider="google",
+            theme="light"
         )
         db.add(user)
     else:
         user.last_login = datetime.datetime.utcnow()
-        if req.photo_url:
-            user.photo_url = req.photo_url
+        if display_name and (not user.display_name or user.display_name == "Google User"):
+            user.display_name = display_name
+        if photo and not user.photo_url:
+            user.photo_url = photo
             
     db.commit()
     db.refresh(user)
@@ -208,6 +227,7 @@ def google_auth(req: GoogleLoginRequest, db: Session = Depends(get_db)):
     return {
         "access_token": token,
         "token_type": "bearer",
+        "is_new_user": is_new,
         "user": {
             "id": user.id,
             "email": user.email,
@@ -217,6 +237,11 @@ def google_auth(req: GoogleLoginRequest, db: Session = Depends(get_db)):
             "provider": user.provider
         }
     }
+
+
+@app.post("/api/auth/google/register")
+def google_register(req: GoogleLoginRequest, db: Session = Depends(get_db)):
+    return google_auth(req, db)
 
 
 @app.post("/api/auth/forgot-password")
