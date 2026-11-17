@@ -42,7 +42,7 @@ class User(Base):
     display_name = Column(String(255), default="User")
     photo_url = Column(String(1024), default="")
     provider = Column(String(50), default="email")  # email, google, demo
-    theme = Column(String(20), default="dark")  # dark, light
+    theme = Column(String(20), default="light")  # light, dark
     default_system_prompt = Column(Text, default="You are ChatGPT, a large language model trained by OpenAI. Follow the user's instructions carefully.")
     temperature = Column(Float, default=0.7)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)

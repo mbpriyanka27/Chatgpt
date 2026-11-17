@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   SparklesIcon, PlusIcon, SearchIcon, PinIcon,
   EditIcon, TrashIcon, SettingsIcon, FileTextIcon, LogOutIcon, CheckIcon, CloseIcon,
-  NewChatPenIcon, SidebarCollapseIcon, GoogleIcon
+  NewChatPenIcon, SidebarCollapseIcon, GoogleIcon, SunIcon, MoonIcon
 } from './Icons';
 
 export interface ChatItem {
@@ -31,6 +31,7 @@ interface SidebarProps {
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   theme?: 'light' | 'dark';
+  onToggleTheme?: () => void;
 }
 
 export function Sidebar({
@@ -49,7 +50,8 @@ export function Sidebar({
   onGoogleLogin,
   isOpenMobile,
   onCloseMobile,
-  theme = 'light'
+  theme = 'light',
+  onToggleTheme
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -131,8 +133,12 @@ export function Sidebar({
         }}
         className={`group relative flex items-center justify-between px-3 py-2 rounded-xl text-sm transition-all cursor-pointer my-0.5 ${
           isActive
-            ? 'bg-[#ECECF1] text-[#111827] font-medium shadow-xs'
-            : 'text-[#374151] hover:bg-[#F3F4F6] hover:text-[#111827]'
+            ? theme === 'dark'
+              ? 'bg-[#212121] text-white font-medium shadow-xs'
+              : 'bg-[#ECECF1] text-[#111827] font-medium shadow-xs'
+            : theme === 'dark'
+              ? 'text-gray-300 hover:bg-[#212121] hover:text-white'
+              : 'text-[#374151] hover:bg-[#F3F4F6] hover:text-[#111827]'
         }`}
       >
         <span className="truncate pr-10 text-[13px]">{chat.title}</span>
@@ -145,14 +151,14 @@ export function Sidebar({
               onTogglePin(chat.id);
             }}
             title={chat.is_pinned ? 'Unpin chat' : 'Pin chat'}
-            className={`p-1 rounded hover:bg-gray-200 ${chat.is_pinned ? 'text-amber-500' : 'text-gray-400'}`}
+            className={`p-1 rounded ${theme === 'dark' ? 'hover:bg-[#2f2f2f]' : 'hover:bg-gray-200'} ${chat.is_pinned ? 'text-amber-500' : 'text-gray-400'}`}
           >
             <PinIcon className="w-3.5 h-3.5" />
           </button>
           <button
             onClick={(e) => startRename(chat, e)}
             title="Rename"
-            className="p-1 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200"
+            className={`p-1 rounded ${theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-400 hover:text-gray-700 hover:bg-gray-200'}`}
           >
             <EditIcon className="w-3.5 h-3.5" />
           </button>
@@ -164,7 +170,7 @@ export function Sidebar({
               }
             }}
             title="Delete"
-            className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-gray-200"
+            className={`p-1 rounded ${theme === 'dark' ? 'text-gray-400 hover:text-red-400 hover:bg-[#2f2f2f]' : 'text-gray-400 hover:text-red-500 hover:bg-gray-200'}`}
           >
             <TrashIcon className="w-3.5 h-3.5" />
           </button>
@@ -309,10 +315,36 @@ export function Sidebar({
                         setUserMenuOpen(false);
                         onGoogleLogin();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors font-medium"
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors font-medium ${
+                        theme === 'dark' ? 'hover:bg-[#2f2f2f] text-gray-200 hover:text-white' : 'hover:bg-gray-100 text-gray-700 hover:text-black'
+                      }`}
                     >
                       <GoogleIcon className="w-4 h-4" />
                       <span>Switch Google Account</span>
+                    </button>
+                  )}
+
+                  {onToggleTheme && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onToggleTheme();
+                      }}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors font-medium ${
+                        theme === 'dark' ? 'hover:bg-[#2f2f2f] text-yellow-300 hover:text-yellow-200' : 'hover:bg-gray-100 text-gray-700 hover:text-black'
+                      }`}
+                    >
+                      {theme === 'dark' ? (
+                        <>
+                          <SunIcon className="w-4 h-4 text-yellow-400" />
+                          <span>Switch to Light Theme</span>
+                        </>
+                      ) : (
+                        <>
+                          <MoonIcon className="w-4 h-4 text-gray-600" />
+                          <span>Switch to Dark Theme</span>
+                        </>
+                      )}
                     </button>
                   )}
 
@@ -321,7 +353,9 @@ export function Sidebar({
                       setUserMenuOpen(false);
                       onOpenSettings();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors"
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
+                      theme === 'dark' ? 'hover:bg-[#2f2f2f] text-gray-200 hover:text-white' : 'hover:bg-gray-100 text-gray-700 hover:text-black'
+                    }`}
                   >
                     <SettingsIcon className="w-4 h-4 text-emerald-600" />
                     <span>Profile & Settings</span>
@@ -331,18 +365,20 @@ export function Sidebar({
                       setUserMenuOpen(false);
                       onOpenDocuments();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors"
+                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors ${
+                      theme === 'dark' ? 'hover:bg-[#2f2f2f] text-gray-200 hover:text-white' : 'hover:bg-gray-100 text-gray-700 hover:text-black'
+                    }`}
                   >
                     <FileTextIcon className="w-4 h-4 text-teal-600" />
                     <span>My Documents (RAG)</span>
                   </button>
-                  <div className="border-t border-gray-100 my-1" />
+                  <div className={`my-1 border-t ${theme === 'dark' ? 'border-[#2f2f2f]' : 'border-gray-100'}`} />
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
                       onLogout();
                     }}
-                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-red-50 text-red-600 text-left transition-colors"
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-red-500/10 text-red-500 text-left transition-colors"
                   >
                     <LogOutIcon className="w-4 h-4" />
                     <span>Sign out</span>
@@ -367,25 +403,42 @@ export function Sidebar({
                   </div>
                 )}
                 <div className="overflow-hidden">
-                  <div className="text-[13px] font-semibold text-[#111827] truncate group-hover:text-emerald-700 transition-colors">
+                  <div className={`text-[13px] font-semibold truncate transition-colors ${
+                    theme === 'dark' ? 'text-white group-hover:text-emerald-400' : 'text-[#111827] group-hover:text-emerald-700'
+                  }`}>
                     {user.display_name || 'Divya Gadwal'}
                   </div>
                 </div>
               </div>
 
-              {/* Action Icons: Settings & Logout */}
-              <div className="flex items-center gap-0.5 text-[#6B7280]">
+              {/* Action Icons: Theme Toggle, Settings & Logout */}
+              <div className={`flex items-center gap-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-[#6B7280]'}`}>
+                {onToggleTheme && (
+                  <button
+                    onClick={onToggleTheme}
+                    title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                      theme === 'dark' ? 'text-yellow-400 hover:bg-[#262626] hover:text-yellow-300' : 'hover:bg-gray-200/70 hover:text-black'
+                    }`}
+                  >
+                    {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
+                  </button>
+                )}
                 <button
                   onClick={onOpenSettings}
                   title="Settings"
-                  className="p-1.5 rounded-lg hover:bg-gray-200/70 hover:text-black transition-colors"
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    theme === 'dark' ? 'hover:bg-[#262626] hover:text-white' : 'hover:bg-gray-200/70 hover:text-black'
+                  }`}
                 >
                   <SettingsIcon className="w-4 h-4" />
                 </button>
                 <button
                   onClick={onLogout}
                   title="Sign out"
-                  className="p-1.5 rounded-lg hover:bg-gray-200/70 hover:text-red-600 transition-colors"
+                  className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                    theme === 'dark' ? 'hover:bg-[#262626] hover:text-red-400' : 'hover:bg-gray-200/70 hover:text-red-600'
+                  }`}
                 >
                   <LogOutIcon className="w-4 h-4" />
                 </button>

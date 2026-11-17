@@ -75,8 +75,8 @@ export default function ChatGPTApp() {
     }
   }, []);
 
-  const toggleTheme = () => {
-    const next = theme === 'light' ? 'dark' : 'light';
+  const toggleTheme = (targetTheme?: 'light' | 'dark') => {
+    const next = targetTheme || (theme === 'light' ? 'dark' : 'light');
     setTheme(next);
     if (typeof window !== 'undefined') {
       localStorage.setItem('chatgpt_theme', next);
@@ -734,7 +734,9 @@ export default function ChatGPTApp() {
   ];
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-[#0e0e17] text-white font-sans antialiased">
+    <div className={`flex h-screen w-screen overflow-hidden font-sans antialiased transition-colors duration-200 ${
+      theme === 'dark' ? 'bg-[#212121] text-[#ececf1]' : 'bg-white text-[#111827]'
+    }`}>
       {/* Sidebar Navigation */}
       <Sidebar
         chats={chats}
@@ -762,12 +764,13 @@ export default function ChatGPTApp() {
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         theme={theme}
+        onToggleTheme={() => toggleTheme()}
       />
 
       {/* Main Chat Canvas */}
       <main className={`flex-1 flex flex-col h-full relative overflow-hidden transition-colors ${theme === 'dark' ? 'bg-[#212121] text-[#ececf1]' : 'bg-white text-[#111827]'}`}>
         {/* Top Header Bar */}
-        <header className={`flex items-center justify-between px-6 py-3.5 border-b z-20 transition-colors ${theme === 'dark' ? 'bg-[#212121] border-[#2f2f2f]' : 'bg-white border-transparent'}`}>
+        <header className={`flex items-center justify-between px-6 py-3.5 border-b z-20 transition-colors ${theme === 'dark' ? 'bg-[#212121] border-[#2f2f2f]' : 'bg-white border-gray-100'}`}>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
@@ -820,18 +823,28 @@ export default function ChatGPTApp() {
           </div>
 
           {/* Top Right Action Icons */}
-          <div className="flex items-center gap-1.5">
-            {/* Theme Toggle (Light / Dark Mood) */}
+          <div className="flex items-center gap-2">
+            {/* Prominent Theme Toggle Button (Light / Dark Mood) */}
             <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+              onClick={() => toggleTheme()}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all shadow-xs cursor-pointer ${
                 theme === 'dark'
-                  ? 'text-yellow-400 hover:text-yellow-300 hover:bg-[#2f2f2f]'
-                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  ? 'bg-[#2a2a2a] text-yellow-300 hover:bg-[#333333] border-[#3f3f3f]'
+                  : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
               }`}
-              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+              title={theme === 'dark' ? 'Currently in Dark Mode. Click to switch to Light Mode' : 'Currently in Light Mode. Click to switch to Dark Mode'}
             >
-              {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
+              {theme === 'dark' ? (
+                <>
+                  <SunIcon className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>Dark</span>
+                </>
+              ) : (
+                <>
+                  <MoonIcon className="w-3.5 h-3.5 text-gray-600" />
+                  <span>Light</span>
+                </>
+              )}
             </button>
 
             {/* Sliders / Settings Button */}
@@ -1279,7 +1292,14 @@ export default function ChatGPTApp() {
         user={user}
         token={token}
         apiUrl={API_BASE_URL}
-        onUserUpdated={(u) => setUser(u)}
+        currentTheme={theme}
+        onThemeChange={(newTheme) => toggleTheme(newTheme)}
+        onUserUpdated={(u) => {
+          setUser(u);
+          if (u.theme) {
+            toggleTheme(u.theme);
+          }
+        }}
         onClearAllChats={handleClearAllChats}
         onAccountDeleted={() => {
           localStorage.clear();

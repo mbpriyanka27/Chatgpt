@@ -10,6 +10,8 @@ interface ProfileSettingsModalProps {
   onUserUpdated: (updatedUser: any) => void;
   onClearAllChats: () => void;
   onAccountDeleted: () => void;
+  currentTheme?: 'light' | 'dark';
+  onThemeChange?: (theme: 'light' | 'dark') => void;
 }
 
 export function ProfileSettingsModal({
@@ -20,11 +22,13 @@ export function ProfileSettingsModal({
   apiUrl,
   onUserUpdated,
   onClearAllChats,
-  onAccountDeleted
+  onAccountDeleted,
+  currentTheme = 'light',
+  onThemeChange
 }: ProfileSettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'profile' | 'model' | 'data'>('profile');
   const [displayName, setDisplayName] = useState(user?.display_name || '');
-  const [theme, setTheme] = useState(user?.theme || 'dark');
+  const [theme, setTheme] = useState(currentTheme || user?.theme || 'light');
   const [systemPrompt, setSystemPrompt] = useState(
     user?.default_system_prompt || "You are ChatGPT, a large language model. Follow the user's instructions carefully."
   );
@@ -183,14 +187,18 @@ export function ProfileSettingsModal({
               </div>
 
               <div>
-                <label className="block text-gray-300 font-medium mb-1">Theme</label>
+                <label className="block text-gray-300 font-medium mb-1">Theme (Mood)</label>
                 <select
                   value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
+                  onChange={(e) => {
+                    const next = e.target.value as 'light' | 'dark';
+                    setTheme(next);
+                    onThemeChange?.(next);
+                  }}
                   className="w-full bg-[#2a2b3d] border border-[rgba(255,255,255,0.1)] rounded-xl px-3.5 py-2 text-sm text-white focus:outline-none focus:border-emerald-500"
                 >
-                  <option value="dark">Dark Theme (ChatGPT Executive)</option>
-                  <option value="light">Light Theme</option>
+                  <option value="light">☀️ Light Theme (Default)</option>
+                  <option value="dark">🌙 Dark Theme (Executive)</option>
                 </select>
               </div>
             </div>
