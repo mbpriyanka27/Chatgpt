@@ -117,6 +117,44 @@ async def stream_hosted_llm(
         except Exception as e:
             print(f"Hosted API exception: {e}")
 
+    # Tier 1b: Free High-Performance Cloud ChatGPT Engine (Structured formatting, full multi-paragraph response)
+    try:
+        pollinations_url = "https://text.pollinations.ai/openai/chat/completions"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "model": "openai",
+            "messages": messages,
+            "temperature": temperature if temperature > 0.1 else 0.7,
+            "stream": True
+        }
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            async with client.stream("POST", pollinations_url, headers=headers, json=payload) as response:
+                if response.status_code == 200:
+                    has_streamed = False
+                    async for line in response.aiter_lines():
+                        if not line:
+                            continue
+                        line = line.strip()
+                        if line.startswith("data: "):
+                            data_str = line[6:].strip()
+                            if data_str == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(data_str)
+                                choices = data.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    content = delta.get("content", "")
+                                    if content:
+                                        has_streamed = True
+                                        yield content
+                            except json.JSONDecodeError:
+                                continue
+                    if has_streamed:
+                        return
+    except Exception as e:
+        print(f"Cloud ChatGPT streaming notice: {e}, falling back to local model")
+
     # Tier 2: Instant In-Memory Streaming with TextIteratorStreamer (Sub-second TTFT)
     global _local_model, _local_tokenizer, _is_loading
     if _local_model is None or _local_tokenizer is None:
@@ -150,7 +188,7 @@ async def stream_hosted_llm(
             generation_kwargs = dict(
                 **inputs,
                 streamer=streamer,
-                max_new_tokens=min(max_tokens, 150),
+                max_new_tokens=min(max_tokens, 1024),
                 temperature=temperature if temperature > 0.1 else 0.7,
                 do_sample=True if temperature > 0.1 else False,
                 pad_token_id=_local_tokenizer.eos_token_id

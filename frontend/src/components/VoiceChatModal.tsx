@@ -50,6 +50,7 @@ export function VoiceChatModal({
   });
   const [isMuted, setIsMuted] = useState(false);
   const [turnCount, setTurnCount] = useState(1);
+  const [typedVoiceQuery, setTypedVoiceQuery] = useState('');
 
   const recognitionRef = useRef<any>(null);
   const synthRef = useRef<SpeechSynthesis | null>(null);
@@ -832,6 +833,60 @@ export function VoiceChatModal({
           )}
         </div>
       </div>
+
+      {/* Optional Type to Voice Question Form */}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (typedVoiceQuery.trim()) {
+            handleUserQuery(typedVoiceQuery.trim());
+            setTypedVoiceQuery('');
+          }
+        }}
+        style={{
+          width: '100%',
+          maxWidth: '400px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          marginBottom: '16px',
+          padding: '0 16px'
+        }}
+      >
+        <input
+          type="text"
+          value={typedVoiceQuery}
+          onChange={(e) => setTypedVoiceQuery(e.target.value)}
+          placeholder="Or type a question to speak..."
+          style={{
+            flex: 1,
+            padding: '9px 16px',
+            borderRadius: '24px',
+            backgroundColor: '#ffffff',
+            border: '1px solid #e2e8f0',
+            fontSize: '13px',
+            color: '#1e293b',
+            outline: 'none',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.04)'
+          }}
+        />
+        <button
+          type="submit"
+          style={{
+            padding: '9px 16px',
+            borderRadius: '24px',
+            backgroundColor: '#10A37F',
+            color: '#ffffff',
+            border: 'none',
+            fontSize: '12px',
+            fontWeight: 600,
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(16,163,127,0.3)'
+          }}
+        >
+          Speak
+        </button>
+      </form>
 
       {/* Bottom Floating Controls */}
       <div style={{ width: '100%', maxWidth: '300px', display: 'flex', alignItems: 'center', justifyContent: 'space-around', paddingBottom: '16px' }}>

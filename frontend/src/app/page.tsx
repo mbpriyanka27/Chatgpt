@@ -1169,6 +1169,16 @@ export default function ChatGPTApp() {
                 <PlusIcon className="w-5 h-5" />
               </button>
 
+              <button
+                onClick={handleInsertImagePrompt}
+                title="Generate HD AI Image (/image ...)"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer text-sm ${
+                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
+              >
+                🎨
+              </button>
+
               <input
                 ref={textareaRef as any}
                 type="text"

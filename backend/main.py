@@ -481,14 +481,24 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all() if chat else []
     if req.is_voice_mode:
         if target_lang != 'en':
-            llm_messages = [{"role": "system", "content": f"You are ChatGPT in real-time voice mode. The user spoke in {lang_label}. You MUST reply ONLY in {lang_label}. Reply in 1 short sentence (under 15 words) in {lang_label}. Never use English. Never use asterisks, emojis, bullet points, or markdown formatting."}]
+            llm_messages = [{"role": "system", "content": f"You are ChatGPT in real-time voice mode. The user spoke in {lang_label}. You MUST reply ONLY in {lang_label}. Reply in 1-2 conversational sentences (under 25 words) in natural spoken {lang_label}. Do NOT use asterisks, emojis, bullet points, or markdown symbols."}]
         else:
-            llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Reply instantly, warmly, and naturally in 1 short sentence (under 15 words). Never use asterisks, emojis, bullet points, or markdown formatting."}]
+            llm_messages = [{"role": "system", "content": "You are ChatGPT in real-time voice mode. Reply warmly, directly, and naturally in 1-2 conversational sentences (under 25 words). Do NOT use asterisks, emojis, bullet points, or markdown symbols."}]
     else:
         if target_lang != 'en':
-            llm_messages = [{"role": "system", "content": f"You are ChatGPT. The user is writing in {lang_label}. You MUST reply strictly in {lang_label}. Never respond in English."}]
+            llm_messages = [{"role": "system", "content": f"You are ChatGPT. The user is writing in {lang_label}. You MUST reply strictly in {lang_label}. Format your answer properly with clear sections, bold highlights, bullet points, and clean GitHub-flavored Markdown. Never respond in English unless specifically requested."}]
         else:
-            llm_messages = [{"role": "system", "content": user.default_system_prompt or "You are ChatGPT, a helpful assistant."}]
+            default_formatted_prompt = (
+                "You are ChatGPT, a large language model trained by OpenAI.\n"
+                "When answering questions, always format your response cleanly using GitHub-flavored Markdown:\n"
+                "- Use clear section headings (### Title) to break down complex topics.\n"
+                "- Use bolding (**concept**) to highlight key terms and takeaways.\n"
+                "- Use bullet points or numbered lists for steps, comparisons, or key points.\n"
+                "- For code, always use fenced code blocks with language identifiers (e.g. ```python, ```javascript, ```sql).\n"
+                "- Give direct, structured, and comprehensive answers. Answer the question completely."
+            )
+            has_custom = user.default_system_prompt and "Follow the user's instructions" not in user.default_system_prompt
+            llm_messages = [{"role": "system", "content": user.default_system_prompt if has_custom else default_formatted_prompt}]
     
     # 4. Handle RAG document injection if requested or document attached
     sources = []
