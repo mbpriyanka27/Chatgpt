@@ -274,20 +274,34 @@ export function Sidebar({
 
         {/* Bottom User Profile & Google Login Section */}
         <div className="p-3 border-t border-gray-200/80 bg-[#F9F9F9] relative">
-          {/* Quick Google Sign In Pill */}
-          <button
-            onClick={onGoogleLogin || onOpenAuth}
-            className="w-full mb-2.5 flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-white hover:bg-gray-50 border border-gray-200 text-gray-700 text-xs font-semibold transition-all shadow-xs group"
-            title="Continue with Google Account"
-          >
-            <GoogleIcon className="w-4 h-4" />
-            <span>Continue with Google</span>
-          </button>
-
           {user ? (
             <div className="flex items-center justify-between">
               {userMenuOpen && (
-                <div className="absolute bottom-16 left-2 right-2 bg-white border border-gray-200 rounded-xl shadow-xl p-1.5 space-y-1 z-50 text-xs">
+                <div className="absolute bottom-16 left-2 right-2 bg-white border border-gray-200 rounded-xl shadow-xl p-2 space-y-1 z-50 text-xs font-sans">
+                  {/* Google Profile Header */}
+                  <div className="px-2.5 py-1.5 pb-2 mb-1 border-b border-gray-100">
+                    <div className="text-[11px] font-bold text-gray-900 truncate">
+                      {user.display_name || 'Google User'}
+                    </div>
+                    <div className="text-[10px] text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                      <GoogleIcon className="w-3 h-3 flex-shrink-0" />
+                      <span className="truncate">{user.email || 'divya.gadwal@gmail.com'}</span>
+                    </div>
+                  </div>
+
+                  {onGoogleLogin && (
+                    <button
+                      onClick={() => {
+                        setUserMenuOpen(false);
+                        onGoogleLogin();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors font-medium"
+                    >
+                      <GoogleIcon className="w-4 h-4" />
+                      <span>Switch Google Account</span>
+                    </button>
+                  )}
+
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -296,7 +310,7 @@ export function Sidebar({
                     className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors"
                   >
                     <SettingsIcon className="w-4 h-4 text-emerald-600" />
-                    <span>Profile & AI Settings</span>
+                    <span>Profile & Settings</span>
                   </button>
                   <button
                     onClick={() => {
@@ -308,18 +322,6 @@ export function Sidebar({
                     <FileTextIcon className="w-4 h-4 text-teal-600" />
                     <span>My Documents (RAG)</span>
                   </button>
-                  {onGoogleLogin && (
-                    <button
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onGoogleLogin();
-                      }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg hover:bg-gray-100 text-gray-700 hover:text-black text-left transition-colors"
-                    >
-                      <GoogleIcon className="w-4 h-4" />
-                      <span>Switch to Google Account</span>
-                    </button>
-                  )}
                   <div className="border-t border-gray-100 my-1" />
                   <button
                     onClick={() => {

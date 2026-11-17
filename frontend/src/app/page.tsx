@@ -141,8 +141,9 @@ export default function ChatGPTApp() {
   // Initial authentication & session check with self-healing validation
   useEffect(() => {
     const initAuth = async () => {
-      const savedToken = localStorage.getItem('chatgpt_token');
-      if (savedToken) {
+      const isExplicitLogout = typeof window !== 'undefined' && localStorage.getItem('chatgpt_logged_out') === 'true';
+      const savedToken = typeof window !== 'undefined' ? localStorage.getItem('chatgpt_token') : null;
+      if (savedToken && !isExplicitLogout) {
         try {
           const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${savedToken}` }
@@ -157,8 +158,11 @@ export default function ChatGPTApp() {
           // Fall through to auto-login
         }
       }
-      // If token missing, invalid, or expired, auto-login Divya Gadwal
-      await autoLoginDivya();
+      if (isExplicitLogout) {
+        setIsGoogleAuthOpen(true);
+      } else {
+        await autoLoginDivya();
+      }
     };
 
     initAuth();
@@ -724,11 +728,12 @@ export default function ChatGPTApp() {
         onLogout={() => {
           localStorage.removeItem('chatgpt_token');
           localStorage.removeItem('chatgpt_user');
+          localStorage.setItem('chatgpt_logged_out', 'true');
           setToken(null);
           setUser(null);
           setChats([]);
           setMessages([]);
-          setIsAuthOpen(true);
+          setIsGoogleAuthOpen(true);
         }}
         onOpenAuth={() => setIsAuthOpen(true)}
         onGoogleLogin={() => setIsGoogleAuthOpen(true)}
@@ -1116,6 +1121,7 @@ export default function ChatGPTApp() {
         isOpen={isGoogleAuthOpen}
         onClose={() => setIsGoogleAuthOpen(false)}
         onSuccess={(tok, usr) => {
+          localStorage.removeItem('chatgpt_logged_out');
           setToken(tok);
           setUser(usr);
           loadChats();
@@ -1130,6 +1136,7 @@ export default function ChatGPTApp() {
         onClose={() => setIsAuthOpen(false)}
         onOpenGoogleAuth={() => setIsGoogleAuthOpen(true)}
         onLoginSuccess={(tok, usr) => {
+          localStorage.removeItem('chatgpt_logged_out');
           setToken(tok);
           setUser(usr);
           loadChats();
