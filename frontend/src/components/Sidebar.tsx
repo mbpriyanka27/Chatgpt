@@ -31,6 +31,8 @@ interface SidebarProps {
   onOpenImageStudio?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  isCollapsedDesktop?: boolean;
+  onToggleCollapseDesktop?: () => void;
   theme?: 'light' | 'dark';
 }
 
@@ -51,6 +53,8 @@ export function Sidebar({
   onOpenImageStudio,
   isOpenMobile,
   onCloseMobile,
+  isCollapsedDesktop = false,
+  onToggleCollapseDesktop,
   theme = 'light'
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -194,6 +198,8 @@ export function Sidebar({
           theme === 'dark' ? 'bg-[#171717] border-r border-[#2f2f2f] text-[#ececf1]' : 'bg-[#F9F9F9] border-r border-[#E5E7EB] text-[#111827]'
         } ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+        } ${
+          isCollapsedDesktop ? 'lg:-ml-[260px] lg:w-0 lg:overflow-hidden lg:opacity-0' : 'lg:w-[260px] lg:opacity-100'
         }`}
       >
         {/* Top Header / Branding (ChatGPT Cloud) */}
@@ -202,7 +208,6 @@ export function Sidebar({
         }`}>
           <div className="flex items-center gap-1.5 cursor-pointer" onClick={onNewChat}>
             <span className={`font-bold text-[17px] tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#0D0D0D]'}`}>ChatGPT</span>
-            <span className="font-bold text-[17px] tracking-tight text-[#0D9488]">Cloud</span>
           </div>
 
           <div className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-400' : 'text-[#6B7280]'}`}>
@@ -214,9 +219,12 @@ export function Sidebar({
               <SearchIcon className="w-4 h-4" />
             </button>
             <button
-              onClick={onCloseMobile}
-              title="Sidebar controls"
-              className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-[#262626] hover:text-white' : 'hover:bg-gray-200/70 hover:text-black'}`}
+              onClick={() => {
+                onCloseMobile();
+                onToggleCollapseDesktop?.();
+              }}
+              title="Collapse sidebar"
+              className={`p-1.5 rounded-lg transition-colors cursor-pointer ${theme === 'dark' ? 'hover:bg-[#262626] hover:text-white' : 'hover:bg-gray-200/70 hover:text-black'}`}
             >
               <SidebarCollapseIcon className="w-4 h-4" />
             </button>

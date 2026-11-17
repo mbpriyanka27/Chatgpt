@@ -7,7 +7,7 @@ import {
   DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon,
   MicIcon, MicOffIcon, SpeakerIcon, ImageIcon, HeadphoneIcon,
   SlidersIcon, VoiceWaveIcon, PdfIcon, PlusIcon, CloseIcon,
-  SunIcon, MoonIcon, GhostIcon
+  SunIcon, MoonIcon, GhostIcon, OpenAILogo, ArrowUpIcon, CodeIcon, CompassIcon, LightbulbIcon
 } from '../components/Icons';
 import { Sidebar, ChatItem } from '../components/Sidebar';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
@@ -59,6 +59,7 @@ export default function ChatGPTApp() {
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarCollapsedDesktop, setIsSidebarCollapsedDesktop] = useState(false);
   const [expandedSources, setExpandedSources] = useState<{ [msgId: string]: boolean }>({});
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
@@ -763,6 +764,8 @@ export default function ChatGPTApp() {
         onOpenImageStudio={() => setIsImageStudioOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        isCollapsedDesktop={isSidebarCollapsedDesktop}
+        onToggleCollapseDesktop={() => setIsSidebarCollapsedDesktop(!isSidebarCollapsedDesktop)}
         theme={theme}
       />
 
@@ -772,8 +775,15 @@ export default function ChatGPTApp() {
         <header className={`flex items-center justify-between px-6 py-3.5 border-b z-20 transition-colors ${theme === 'dark' ? 'bg-[#212121] border-[#2f2f2f]' : 'bg-white border-gray-100'}`}>
           <div className="flex items-center gap-2">
             <button
-              onClick={() => setIsMobileSidebarOpen(true)}
-              className={`lg:hidden p-1.5 rounded-lg mr-1 ${theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
+              onClick={() => {
+                if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+                  setIsMobileSidebarOpen(!isMobileSidebarOpen);
+                } else {
+                  setIsSidebarCollapsedDesktop(!isSidebarCollapsedDesktop);
+                }
+              }}
+              className={`p-1.5 rounded-lg mr-1 cursor-pointer transition-colors ${theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-600 hover:text-black hover:bg-gray-100'}`}
+              title={isSidebarCollapsedDesktop ? "Expand sidebar" : "Collapse sidebar"}
             >
               <MenuIcon className="w-5 h-5" />
             </button>
@@ -913,77 +923,113 @@ export default function ChatGPTApp() {
         <div className={`flex-1 overflow-y-auto px-6 py-4 scrollbar-thin transition-colors ${theme === 'dark' ? 'bg-[#212121]' : 'bg-white'}`}>
           <div className="max-w-3xl mx-auto space-y-6 pt-2">
             {messages.length === 0 ? (
-              /* Clean Active ChatGPT Home View */
-              <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-4 my-auto">
-                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md mb-4 ${theme === 'dark' ? 'bg-[#2f2f2f] text-white' : 'bg-black text-white'}`}>
-                  <SparklesIcon className="w-6 h-6 text-white" />
+              /* Clean Active ChatGPT Monochrome Home View */
+              <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-4 my-auto select-none">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-xs mb-5 ${theme === 'dark' ? 'bg-[#2a2a2a] text-white border border-[#383838]' : 'bg-black text-white'}`}>
+                  <OpenAILogo className="w-6 h-6" />
                 </div>
-                <h1 className={`text-2xl font-bold mb-2 tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#111827]'}`}>
+                <h1 className={`text-2xl sm:text-3xl font-semibold mb-2 tracking-tight ${theme === 'dark' ? 'text-white' : 'text-black'}`}>
                   What can I help with today?
                 </h1>
-                <p className={`text-sm max-w-md mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
-                  Ask anything, ground answers with your data, create AI images, or start hands-free voice chat.
+                <p className={`text-xs sm:text-sm max-w-md mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
+                  Select a prompt suggestion below or type your message in the chat box.
                 </p>
 
-                {/* 4 Interactive Feature Starter Cards */}
+                {/* 2x2 Minimal Black-and-White Prompt Suggestion Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl text-left">
                   <button
-                    onClick={() => handleSendMessage('/image A beautiful cinematic cyberpunk Bangalore skyline with rain and neon lights')}
-                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
-                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    onClick={() => {
+                      setInputPrompt('Explain quantum computing using simple real-world analogies.');
+                      textareaRef.current?.focus();
+                    }}
+                    className={`p-4 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark'
+                        ? 'bg-[#262626] border-[#383838] hover:border-gray-500 hover:bg-[#2c2c2c] text-white'
+                        : 'bg-white border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-black'
                     }`}
                   >
-                    <div className="text-xs font-semibold group-hover:text-emerald-500 flex items-center gap-1.5 mb-1">
-                      <span>🎨</span>
-                      <span>Generate an AI image</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold tracking-tight text-black dark:text-white">
+                        Explain complex concepts
+                      </span>
+                      <div className="p-1 rounded-md bg-gray-100 dark:bg-[#333] text-gray-700 dark:text-gray-300">
+                        <LightbulbIcon className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <div className="text-[12px] text-gray-400 line-clamp-1">
-                      Cyberpunk Bangalore skyline in neon rain
+                    <div className="text-[12px] text-gray-500 dark:text-gray-400 line-clamp-2">
+                      Break down quantum computing using simple real-world analogies
                     </div>
                   </button>
 
                   <button
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
-                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    onClick={() => {
+                      setInputPrompt('Write a clean TypeScript service class with typed fetch and robust error handling.');
+                      textareaRef.current?.focus();
+                    }}
+                    className={`p-4 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark'
+                        ? 'bg-[#262626] border-[#383838] hover:border-gray-500 hover:bg-[#2c2c2c] text-white'
+                        : 'bg-white border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-black'
                     }`}
                   >
-                    <div className="text-xs font-semibold group-hover:text-teal-500 flex items-center gap-1.5 mb-1">
-                      <span>📄</span>
-                      <span>Attach & Analyze Document</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold tracking-tight text-black dark:text-white">
+                        Write & debug code
+                      </span>
+                      <div className="p-1 rounded-md bg-gray-100 dark:bg-[#333] text-gray-700 dark:text-gray-300">
+                        <CodeIcon className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <div className="text-[12px] text-gray-400 line-clamp-1">
-                      Upload PDF, DOCX, or CSV data for RAG answers
+                    <div className="text-[12px] text-gray-500 dark:text-gray-400 line-clamp-2">
+                      Design a clean TypeScript service class with typed error handling
                     </div>
                   </button>
 
                   <button
-                    onClick={() => handleSendMessage('Brainstorm 5 innovative startup ideas combining Agentic AI and healthcare in India')}
-                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
-                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    onClick={() => {
+                      setInputPrompt('Brainstorm 5 innovative startup ideas combining AI and productivity.');
+                      textareaRef.current?.focus();
+                    }}
+                    className={`p-4 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark'
+                        ? 'bg-[#262626] border-[#383838] hover:border-gray-500 hover:bg-[#2c2c2c] text-white'
+                        : 'bg-white border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-black'
                     }`}
                   >
-                    <div className="text-xs font-semibold group-hover:text-indigo-400 flex items-center gap-1.5 mb-1">
-                      <span>💡</span>
-                      <span>Brainstorm ideas</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold tracking-tight text-black dark:text-white">
+                        Brainstorm creative ideas
+                      </span>
+                      <div className="p-1 rounded-md bg-gray-100 dark:bg-[#333] text-gray-700 dark:text-gray-300">
+                        <SparklesIcon className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <div className="text-[12px] text-gray-400 line-clamp-1">
-                      Agentic AI startup ideas in healthcare
+                    <div className="text-[12px] text-gray-500 dark:text-gray-400 line-clamp-2">
+                      Generate 5 innovative startup ideas combining AI and productivity
                     </div>
                   </button>
 
                   <button
-                    onClick={() => setIsVoiceModalOpen(true)}
-                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
-                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    onClick={() => {
+                      setInputPrompt('Compare monolithic vs microservices architecture focusing on scalability tradeoffs.');
+                      textareaRef.current?.focus();
+                    }}
+                    className={`p-4 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark'
+                        ? 'bg-[#262626] border-[#383838] hover:border-gray-500 hover:bg-[#2c2c2c] text-white'
+                        : 'bg-white border-gray-200 hover:border-gray-400 hover:bg-gray-50 text-black'
                     }`}
                   >
-                    <div className="text-xs font-semibold group-hover:text-emerald-500 flex items-center gap-1.5 mb-1">
-                      <span>🎙️</span>
-                      <span>Interactive Voice Chat</span>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-semibold tracking-tight text-black dark:text-white">
+                        Analyze & synthesize
+                      </span>
+                      <div className="p-1 rounded-md bg-gray-100 dark:bg-[#333] text-gray-700 dark:text-gray-300">
+                        <CompassIcon className="w-3.5 h-3.5" />
+                      </div>
                     </div>
-                    <div className="text-[12px] text-gray-400 line-clamp-1">
-                      Hands-free fluid orb in Kannada or English
+                    <div className="text-[12px] text-gray-500 dark:text-gray-400 line-clamp-2">
+                      Compare monolithic vs microservices architecture tradeoffs
                     </div>
                   </button>
                 </div>
@@ -1171,17 +1217,17 @@ export default function ChatGPTApp() {
               </div>
             )}
 
-            {/* Floating Capsule Input Bar */}
-            <div className={`relative flex items-center rounded-full border px-3.5 py-1.5 w-full transition-all ${
+            {/* Rounded Capsule Message Input Box */}
+            <div className={`relative flex items-center rounded-3xl border px-3.5 py-2 w-full transition-all ${
               theme === 'dark'
-                ? 'bg-[#2f2f2f] border-[#3f3f3f] shadow-[0_2px_14px_rgba(0,0,0,0.3)] focus-within:border-gray-500'
-                : 'bg-white border-gray-200 shadow-[0_2px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-300'
+                ? 'bg-[#262626] border-[#383838] shadow-xs focus-within:border-gray-500'
+                : 'bg-[#f4f4f4] border-gray-300 shadow-xs focus-within:border-gray-500 focus-within:bg-white'
             }`}>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach file or document (PDF, DOCX, TXT, CSV)"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer ${
-                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#333333]' : 'text-gray-500 hover:text-black hover:bg-gray-200/70'
                 }`}
               >
                 <PlusIcon className="w-5 h-5" />
@@ -1189,9 +1235,9 @@ export default function ChatGPTApp() {
 
               <button
                 onClick={handleInsertImagePrompt}
-                title="Generate HD AI Image (/image ...)"
+                title="Generate HD AI Image"
                 className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer text-sm ${
-                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#333333]' : 'text-gray-500 hover:text-black hover:bg-gray-200/70'
                 }`}
               >
                 🎨
@@ -1208,33 +1254,45 @@ export default function ChatGPTApp() {
                     handleSendMessage();
                   }
                 }}
-                placeholder={isTemporaryChat ? "Ask anything in temporary chat..." : "Ask anything"}
+                placeholder="Message ChatGPT..."
                 className={`flex-1 bg-transparent text-[14px] focus:outline-none px-3 py-1 font-sans ${
-                  theme === 'dark' ? 'text-white placeholder-gray-400' : 'text-gray-800 placeholder-gray-400'
+                  theme === 'dark' ? 'text-white placeholder-gray-400' : 'text-black placeholder-gray-400'
                 }`}
               />
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={() => setIsVoiceModalOpen(true)}
-                  title="ChatGPT Voice Mode (Interactive Fluid Circle)"
+                  title="Voice Mode"
                   className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
-                    theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                    theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#333333]' : 'text-gray-500 hover:text-black hover:bg-gray-200/70'
                   }`}
                 >
                   <MicIcon className="w-4 h-4" />
                 </button>
 
-                {/* Signature Green Voice Wave Button */}
+                {/* Send Button */}
                 <button
-                  onClick={() => setIsVoiceModalOpen(true)}
-                  title="ChatGPT Voice Mode (Interactive Fluid Circle)"
-                  className="w-9 h-9 rounded-full bg-[#10A37F] hover:bg-[#0D8A6C] text-white flex items-center justify-center shadow-sm transition-transform active:scale-95 cursor-pointer"
+                  onClick={() => handleSendMessage()}
+                  disabled={!inputPrompt.trim()}
+                  title="Send message"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                    inputPrompt.trim()
+                      ? theme === 'dark'
+                        ? 'bg-white text-black hover:opacity-90 shadow-xs'
+                        : 'bg-black text-white hover:opacity-90 shadow-xs'
+                      : 'bg-gray-300 dark:bg-[#383838] text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  }`}
                 >
-                  <VoiceWaveIcon className="w-5 h-5 text-white" />
+                  <ArrowUpIcon className="w-4 h-4" />
                 </button>
               </div>
             </div>
+
+            {/* Disclaimer Footer */}
+            <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center mt-2 font-normal select-none">
+              ChatGPT can make mistakes. Check important info.
+            </p>
           </div>
         </div>
       </main>
