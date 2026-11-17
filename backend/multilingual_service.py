@@ -23,19 +23,46 @@ KEYWORD_HINTS: Dict[str, str] = {
     'kannada': 'kn',
     'kannadadalli': 'kn',
     'kannadada': 'kn',
+    'namaskara': 'kn',
+    'hegiddeera': 'kn',
+    'hegiddira': 'kn',
+    'dhanyavada': 'kn',
     'hindi': 'hi',
     'hindimein': 'hi',
+    'namaste': 'hi',
+    'kaise': 'hi',
+    'shukriya': 'hi',
     'telugu': 'te',
+    'namaskaram': 'te',
+    'bagunnara': 'te',
     'tamil': 'ta',
+    'vanakkam': 'ta',
+    'eppadi': 'ta',
+    'nandri': 'ta',
     'spanish': 'es',
+    'hola': 'es',
+    'gracias': 'es',
     'french': 'fr',
+    'bonjour': 'fr',
+    'merci': 'fr',
     'german': 'de',
+    'guten': 'de',
+    'danke': 'de',
     'italian': 'it',
+    'ciao': 'it',
     'portuguese': 'pt',
+    'ola': 'pt',
+    'obrigado': 'pt',
     'arabic': 'ar',
+    'marhaba': 'ar',
+    'shukran': 'ar',
     'chinese': 'zh',
+    'nihao': 'zh',
     'japanese': 'ja',
+    'konnichiwa': 'ja',
+    'arigato': 'ja',
     'korean': 'ko',
+    'annyeong': 'ko',
 }
 
 LANGUAGE_NAMES: Dict[str, str] = {
@@ -96,11 +123,6 @@ def detect_language(text: str, hint: Optional[str] = None) -> str:
     Detects language code from script characters, explicit hints, or keywords.
     Returns ISO 639-1 code ('kn', 'hi', 'en', 'es', etc.).
     """
-    if hint and hint != 'auto':
-        clean_hint = hint.split('-')[0].lower()
-        if clean_hint in LANGUAGE_NAMES:
-            return clean_hint
-
     # Check Unicode script ranges first (100% precision)
     for pattern, code in SCRIPT_PATTERNS:
         if pattern.search(text):
@@ -111,6 +133,12 @@ def detect_language(text: str, hint: Optional[str] = None) -> str:
     for kw, code in KEYWORD_HINTS.items():
         if re.search(r'\b' + re.escape(kw) + r'\b', lower_text):
             return code
+
+    # If non-English hint specified, respect it
+    if hint and hint != 'auto':
+        clean_hint = hint.split('-')[0].lower()
+        if clean_hint in LANGUAGE_NAMES and clean_hint != 'en':
+            return clean_hint
 
     return 'en'
 

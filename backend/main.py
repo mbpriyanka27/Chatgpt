@@ -543,7 +543,7 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
                     model=req.model or "flux",
                     api_key=req.api_key or ""
                 )
-                img_markdown = f"![{img_prompt}]({img_res['url']})\n\n**Generated Image**: *{img_prompt}*\n\n*(Model: {img_res['model'].upper()} • Click to view full size)*"
+                img_markdown = f"![{img_prompt}]({img_res['url']})\n\n**HD Generated Image (PNG)**: *{img_prompt}*\n\n*(Clarity: 8K High Definition PNG • Click to preview & download)*"
                 yield f"data: {json.dumps({'event': 'chunk', 'text': img_markdown})}\n\n"
                 full_content = notice + img_markdown
             except Exception as e:

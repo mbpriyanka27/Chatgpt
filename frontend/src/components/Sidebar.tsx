@@ -28,10 +28,10 @@ interface SidebarProps {
   onLogout: () => void;
   onOpenAuth: () => void;
   onGoogleLogin?: () => void;
+  onOpenImageStudio?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
   theme?: 'light' | 'dark';
-  onToggleTheme?: () => void;
 }
 
 export function Sidebar({
@@ -48,10 +48,10 @@ export function Sidebar({
   onLogout,
   onOpenAuth,
   onGoogleLogin,
+  onOpenImageStudio,
   isOpenMobile,
   onCloseMobile,
-  theme = 'light',
-  onToggleTheme
+  theme = 'light'
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -223,8 +223,8 @@ export function Sidebar({
           </div>
         </div>
 
-        {/* Action: 📝 New chat Button */}
-        <div className="p-3 pb-2">
+        {/* Action: 📝 New chat Button & 🎨 HD Image Studio */}
+        <div className="p-3 pb-2 space-y-1.5">
           <button
             onClick={() => {
               onNewChat();
@@ -242,6 +242,28 @@ export function Sidebar({
               Ctrl+Shift+O
             </kbd>
           </button>
+
+          {onOpenImageStudio && (
+            <button
+              onClick={() => {
+                onOpenImageStudio();
+                onCloseMobile();
+              }}
+              className={`w-full flex items-center justify-between px-3.5 py-2 rounded-xl border text-xs font-medium transition-all shadow-2xs cursor-pointer ${
+                theme === 'dark'
+                  ? 'bg-[#212121] hover:bg-[#262626] border-[#2f2f2f] text-emerald-400'
+                  : 'bg-white hover:bg-emerald-50/60 border-gray-200 text-emerald-700'
+              }`}
+            >
+              <div className="flex items-center gap-2.5">
+                <SparklesIcon className="w-4 h-4 text-emerald-600" />
+                <span className="text-[13px] font-medium">HD Image Studio</span>
+              </div>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
+                PNG
+              </span>
+            </button>
+          )}
         </div>
 
         {/* Search Input (Collapsible or always cleanly visible when open) */}
@@ -324,30 +346,6 @@ export function Sidebar({
                     </button>
                   )}
 
-                  {onToggleTheme && (
-                    <button
-                      onClick={() => {
-                        setUserMenuOpen(false);
-                        onToggleTheme();
-                      }}
-                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-left transition-colors font-medium ${
-                        theme === 'dark' ? 'hover:bg-[#2f2f2f] text-yellow-300 hover:text-yellow-200' : 'hover:bg-gray-100 text-gray-700 hover:text-black'
-                      }`}
-                    >
-                      {theme === 'dark' ? (
-                        <>
-                          <SunIcon className="w-4 h-4 text-yellow-400" />
-                          <span>Switch to Light Theme</span>
-                        </>
-                      ) : (
-                        <>
-                          <MoonIcon className="w-4 h-4 text-gray-600" />
-                          <span>Switch to Dark Theme</span>
-                        </>
-                      )}
-                    </button>
-                  )}
-
                   <button
                     onClick={() => {
                       setUserMenuOpen(false);
@@ -411,19 +409,8 @@ export function Sidebar({
                 </div>
               </div>
 
-              {/* Action Icons: Theme Toggle, Settings & Logout */}
+              {/* Action Icons: Settings & Logout */}
               <div className={`flex items-center gap-0.5 ${theme === 'dark' ? 'text-gray-400' : 'text-[#6B7280]'}`}>
-                {onToggleTheme && (
-                  <button
-                    onClick={onToggleTheme}
-                    title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-                    className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
-                      theme === 'dark' ? 'text-yellow-400 hover:bg-[#262626] hover:text-yellow-300' : 'hover:bg-gray-200/70 hover:text-black'
-                    }`}
-                  >
-                    {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
-                  </button>
-                )}
                 <button
                   onClick={onOpenSettings}
                   title="Settings"
@@ -446,20 +433,12 @@ export function Sidebar({
             </div>
           ) : (
             <div className="space-y-2">
-              {onGoogleLogin && (
-                <button
-                  onClick={onGoogleLogin}
-                  className="w-full flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold text-xs transition-colors shadow-xs"
-                >
-                  <GoogleIcon className="w-4 h-4" />
-                  <span>Continue with Google</span>
-                </button>
-              )}
               <button
-                onClick={onOpenAuth}
-                className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-gray-900 hover:bg-black text-white font-medium text-xs transition-colors shadow-xs"
+                onClick={onGoogleLogin || onOpenAuth}
+                className="w-full flex items-center justify-center gap-2.5 py-2.5 px-3 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 font-semibold text-xs transition-colors shadow-xs"
               >
-                <span>Email Sign In / Register</span>
+                <GoogleIcon className="w-4 h-4" />
+                <span>Continue with Google</span>
               </button>
             </div>
           )}

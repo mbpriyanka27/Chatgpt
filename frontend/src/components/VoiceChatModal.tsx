@@ -262,8 +262,8 @@ export function VoiceChatModal({
           prompt: query,
           model: selectedModel,
           is_voice_mode: true,
-          voice_language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
-          language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
+          voice_language: selectedLang !== 'auto' ? selectedLang : 'auto',
+          language: selectedLang !== 'auto' ? selectedLang : 'auto',
           max_tokens: 45, // Snappy real-time response
           api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
@@ -296,8 +296,8 @@ export function VoiceChatModal({
                 prompt: query,
                 model: selectedModel,
                 is_voice_mode: true,
-                voice_language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
-                language: selectedLang !== 'auto' ? selectedLang : detectedLangRef.current,
+                voice_language: selectedLang !== 'auto' ? selectedLang : 'auto',
+                language: selectedLang !== 'auto' ? selectedLang : 'auto',
                 max_tokens: 45,
                 api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
               }),
@@ -330,6 +330,28 @@ export function VoiceChatModal({
                 if (payload.event === 'start') {
                   if (payload.chat_id) {
                     currentChatIdRef.current = payload.chat_id;
+                  }
+                  if (payload.target_lang) {
+                    const langMap: Record<string, string> = {
+                      kn: 'kn-IN',
+                      hi: 'hi-IN',
+                      te: 'te-IN',
+                      ta: 'ta-IN',
+                      ml: 'ml-IN',
+                      bn: 'bn-IN',
+                      es: 'es-ES',
+                      fr: 'fr-FR',
+                      de: 'de-DE',
+                      it: 'it-IT',
+                      pt: 'pt-BR',
+                      ru: 'ru-RU',
+                      ar: 'ar-SA',
+                      zh: 'zh-CN',
+                      ja: 'ja-JP',
+                      ko: 'ko-KR',
+                      en: 'en-US'
+                    };
+                    detectedLangRef.current = langMap[payload.target_lang] || `${payload.target_lang}-IN`;
                   }
                 } else if (payload.event === 'chunk') {
                   const tokenText = payload.text;
@@ -421,7 +443,7 @@ export function VoiceChatModal({
 
     const voices = synthRef.current.getVoices();
     // Detect speech language from text script
-    let targetLang = detectedLangRef.current || 'kn-IN';
+    let targetLang = detectedLangRef.current || 'en-US';
     if (/[\u0C80-\u0CFF]/.test(clean)) {
       targetLang = 'kn-IN';
     } else if (/[\u0900-\u097F]/.test(clean)) {
@@ -430,8 +452,20 @@ export function VoiceChatModal({
       targetLang = 'te-IN';
     } else if (/[\u0B80-\u0BFF]/.test(clean)) {
       targetLang = 'ta-IN';
+    } else if (/[\u0D00-\u0D7F]/.test(clean)) {
+      targetLang = 'ml-IN';
+    } else if (/[\u0980-\u09FF]/.test(clean)) {
+      targetLang = 'bn-IN';
     } else if (/[\u0600-\u06FF]/.test(clean)) {
       targetLang = 'ar-SA';
+    } else if (/[\u4E00-\u9FFF]/.test(clean)) {
+      targetLang = 'zh-CN';
+    } else if (/[\u3040-\u30FF]/.test(clean)) {
+      targetLang = 'ja-JP';
+    } else if (/[\uAC00-\uD7AF]/.test(clean)) {
+      targetLang = 'ko-KR';
+    } else if (/[\u0400-\u04FF]/.test(clean)) {
+      targetLang = 'ru-RU';
     }
 
     const currentLangCode = targetLang.slice(0, 2).toLowerCase();

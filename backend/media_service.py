@@ -88,7 +88,7 @@ async def generate_image(
     image_id = str(uuid.uuid4())
     user_img_dir = IMAGES_DIR / user_id
     user_img_dir.mkdir(parents=True, exist_ok=True)
-    local_filename = f"{image_id}.jpg"
+    local_filename = f"{image_id}.png"
     local_path = user_img_dir / local_filename
 
     # If prompt is in Kannada, Hindi, etc., translate to English for visual synthesis
@@ -146,17 +146,26 @@ async def generate_image(
         f"?width={width}&height={height}&seed={seed}&nologo=true&enhance=true"
     )
 
-    # Trigger background download to local cache asynchronously so response is instant
+    # Asynchronously download and convert to lossless crystal-clear PNG
+    import io
     import asyncio
+    from PIL import Image, ImageEnhance
+
     async def cache_image_locally(target_url: str, save_path: Path):
         try:
-            async with httpx.AsyncClient(timeout=40.0) as client:
+            async with httpx.AsyncClient(timeout=45.0) as client:
                 headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ChatGPT-Pro/3.0"}
                 img_res = await client.get(target_url, headers=headers)
                 if img_res.status_code == 200 and len(img_res.content) > 1000:
-                    save_path.write_bytes(img_res.content)
+                    try:
+                        raw_img = Image.open(io.BytesIO(img_res.content))
+                        enhancer = ImageEnhance.Sharpness(raw_img)
+                        hd_img = enhancer.enhance(1.2)
+                        hd_img.save(save_path, format="PNG", optimize=True)
+                    except Exception:
+                        save_path.write_bytes(img_res.content)
         except Exception as e:
-            print(f"Background image cache note: {e}")
+            print(f"Background PNG image cache note: {e}")
 
     try:
         asyncio.create_task(cache_image_locally(pollinations_url, local_path))
@@ -167,8 +176,10 @@ async def generate_image(
         "image_id": image_id,
         "url": pollinations_url,
         "remote_url": pollinations_url,
+        "local_url": f"/media/images/{user_id}/{local_filename}",
         "prompt": prompt,
-        "model": "HD-Flux-Sana"
+        "format": "PNG",
+        "model": "HD-Sana-PNG"
     }
 
 

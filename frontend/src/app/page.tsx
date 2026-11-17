@@ -15,7 +15,8 @@ import { AuthModal } from '../components/AuthModal';
 import { DocumentManagerModal } from '../components/DocumentManagerModal';
 import { ProfileSettingsModal } from '../components/ProfileSettingsModal';
 import { VoiceChatModal } from '../components/VoiceChatModal';
-import { GoogleAuthModal } from '../components/GoogleAuthModal';
+import GoogleAuthModal from '../components/GoogleAuthModal';
+import { ImageStudioModal } from '../components/ImageStudioModal';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -54,6 +55,7 @@ export default function ChatGPTApp() {
   // Modals & Drawers
   const [isAuthOpen, setIsAuthOpen] = useState(false);
   const [isGoogleAuthOpen, setIsGoogleAuthOpen] = useState(false);
+  const [isImageStudioOpen, setIsImageStudioOpen] = useState(false);
   const [isDocsOpen, setIsDocsOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
@@ -657,10 +659,7 @@ export default function ChatGPTApp() {
   };
 
   const handleInsertImagePrompt = () => {
-    if (!inputPrompt.startsWith('/image')) {
-      setInputPrompt('/image ');
-    }
-    textareaRef.current?.focus();
+    setIsImageStudioOpen(true);
   };
 
   const handleVoiceModalSend = async (voiceQuery: string): Promise<string> => {
@@ -759,12 +758,12 @@ export default function ChatGPTApp() {
           setMessages([]);
           setIsGoogleAuthOpen(true);
         }}
-        onOpenAuth={() => setIsAuthOpen(true)}
+        onOpenAuth={() => setIsGoogleAuthOpen(true)}
         onGoogleLogin={() => setIsGoogleAuthOpen(true)}
+        onOpenImageStudio={() => setIsImageStudioOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
         theme={theme}
-        onToggleTheme={() => toggleTheme()}
       />
 
       {/* Main Chat Canvas */}
@@ -823,29 +822,48 @@ export default function ChatGPTApp() {
           </div>
 
           {/* Top Right Action Icons */}
-          <div className="flex items-center gap-2">
-            {/* Prominent Theme Toggle Button (Light / Dark Mood) */}
+          <div className="flex items-center gap-2.5">
+            {/* HD Image Studio Top Shortcut */}
             <button
-              onClick={() => toggleTheme()}
+              onClick={() => setIsImageStudioOpen(true)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all shadow-xs cursor-pointer ${
                 theme === 'dark'
-                  ? 'bg-[#2a2a2a] text-yellow-300 hover:bg-[#333333] border-[#3f3f3f]'
-                  : 'bg-white hover:bg-gray-50 text-gray-700 border-gray-200'
+                  ? 'bg-[#2a2a2a] text-emerald-400 hover:bg-[#333] border-[#3f3f3f]'
+                  : 'bg-white hover:bg-emerald-50 text-emerald-700 border-gray-200'
               }`}
-              title={theme === 'dark' ? 'Currently in Dark Mode. Click to switch to Light Mode' : 'Currently in Light Mode. Click to switch to Dark Mode'}
+              title="Open HD Image Studio (Lossless PNG)"
             >
-              {theme === 'dark' ? (
-                <>
-                  <SunIcon className="w-3.5 h-3.5 text-yellow-400" />
-                  <span>Dark</span>
-                </>
-              ) : (
-                <>
-                  <MoonIcon className="w-3.5 h-3.5 text-gray-600" />
-                  <span>Light</span>
-                </>
-              )}
+              <SparklesIcon className="w-3.5 h-3.5 text-emerald-500" />
+              <span>HD Studio</span>
             </button>
+
+            {/* Prominent Single Theme Switcher at Top Only (Light / Dark Mood) */}
+            <div className={`flex items-center p-0.5 rounded-full border ${theme === 'dark' ? 'bg-[#2a2a2a] border-[#3f3f3f]' : 'bg-gray-100 border-gray-200'}`}>
+              <button
+                onClick={() => toggleTheme('light')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  theme === 'light'
+                    ? 'bg-white text-gray-900 shadow-xs'
+                    : 'text-gray-400 hover:text-white'
+                }`}
+                title="Switch to Built-in Light Theme"
+              >
+                <SunIcon className="w-3.5 h-3.5 text-amber-500" />
+                <span>Light</span>
+              </button>
+              <button
+                onClick={() => toggleTheme('dark')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  theme === 'dark'
+                    ? 'bg-[#1e1e1e] text-yellow-300 shadow-xs'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+                title="Switch to Dark Theme"
+              >
+                <MoonIcon className="w-3.5 h-3.5" />
+                <span>Dark</span>
+              </button>
+            </div>
 
             {/* Sliders / Settings Button */}
             <button
@@ -1264,14 +1282,35 @@ export default function ChatGPTApp() {
       <GoogleAuthModal
         isOpen={isGoogleAuthOpen}
         onClose={() => setIsGoogleAuthOpen(false)}
-        onSuccess={(tok, usr) => {
+        onLoginSuccess={(account) => {
           localStorage.removeItem('chatgpt_logged_out');
-          setToken(tok);
+          setToken(account.token);
+          const usr = {
+            id: account.email,
+            display_name: account.name,
+            email: account.email,
+            photo_url: account.avatar
+          };
+          localStorage.setItem('chatgpt_token', account.token);
+          localStorage.setItem('chatgpt_user', JSON.stringify(usr));
           setUser(usr);
           loadChats();
           loadDocCount();
         }}
+      />
+
+      {/* HD Image Studio Modal (Lossless PNG) */}
+      <ImageStudioModal
+        isOpen={isImageStudioOpen}
+        onClose={() => setIsImageStudioOpen(false)}
         apiUrl={API_BASE_URL}
+        token={token}
+        theme={theme}
+        onSendToChat={(promptText) => {
+          setInputPrompt(promptText);
+          setIsImageStudioOpen(false);
+          textareaRef.current?.focus();
+        }}
       />
 
       {/* Modals */}

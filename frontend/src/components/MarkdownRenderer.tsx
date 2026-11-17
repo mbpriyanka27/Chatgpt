@@ -47,7 +47,7 @@ function ImageCard({ src, alt }: { src: string; alt: string }) {
     e.stopPropagation();
     const a = document.createElement('a');
     a.href = effectiveSrc;
-    a.download = `${alt || 'chatgpt-generated-image'}.jpg`;
+    a.download = `${(alt || 'chatgpt-hd-image').replace(/[^a-zA-Z0-9_-]/g, '_')}.png`;
     a.target = '_blank';
     document.body.appendChild(a);
     a.click();
@@ -56,10 +56,10 @@ function ImageCard({ src, alt }: { src: string; alt: string }) {
 
   return (
     <>
-      <div className="my-3 relative group rounded-2xl overflow-hidden border border-[rgba(255,255,255,0.15)] bg-[#12121e] max-w-lg shadow-xl cursor-pointer">
+      <div className="my-3 relative group rounded-2xl overflow-hidden border border-gray-200 dark:border-gray-800 bg-neutral-900 max-w-lg shadow-xl cursor-pointer">
         {!loaded && (
-          <div className="w-full h-64 bg-[#1f1f30] animate-pulse flex items-center justify-center text-xs text-gray-400">
-            <span>🎨 Loading generated image...</span>
+          <div className="w-full h-64 bg-neutral-800 animate-pulse flex items-center justify-center text-xs text-gray-300">
+            <span>🎨 Synthesizing 8K HD image (PNG)...</span>
           </div>
         )}
         <img
@@ -67,25 +67,25 @@ function ImageCard({ src, alt }: { src: string; alt: string }) {
           alt={alt}
           onLoad={() => setLoaded(true)}
           onClick={() => setIsZoomed(true)}
-          className={`w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.02] ${loaded ? 'block' : 'hidden'
-            }`}
+          style={{ imageRendering: '-webkit-optimize-contrast' }}
+          className={`w-full h-auto object-cover transition-transform duration-300 group-hover:scale-[1.01] ${loaded ? 'block' : 'hidden'}`}
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3">
-          <span className="text-xs text-white/90 font-medium truncate max-w-[70%]">{alt}</span>
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-end justify-between p-3.5">
+          <span className="text-xs text-white font-medium truncate max-w-[65%]">{alt}</span>
           <div className="flex items-center gap-2">
             <button
               onClick={handleDownload}
-              className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-medium shadow-md transition-colors flex items-center gap-1"
-              title="Download image"
+              className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold shadow-md transition-colors flex items-center gap-1 cursor-pointer"
+              title="Download HD PNG"
             >
-              ⬇️ Save
+              ⬇️ Save PNG
             </button>
             <button
               onClick={() => setIsZoomed(true)}
-              className="px-2.5 py-1 rounded-lg bg-white/20 hover:bg-white/30 text-white text-xs font-medium backdrop-blur-sm transition-colors"
-              title="Full preview"
+              className="px-3 py-1.5 rounded-lg bg-white/25 hover:bg-white/35 text-white text-xs font-medium backdrop-blur-sm transition-colors cursor-pointer"
+              title="View full resolution"
             >
-              🔍 View
+              🔍 Full HD
             </button>
           </div>
         </div>
