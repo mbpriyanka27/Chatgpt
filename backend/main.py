@@ -69,9 +69,10 @@ class LoginRequest(BaseModel):
     password: str
 
 class GoogleLoginRequest(BaseModel):
-    email: str
-    display_name: Optional[str] = "Google User"
-    photo_url: Optional[str] = ""
+    email: Optional[str] = None
+    display_name: Optional[str] = None
+    photo_url: Optional[str] = None
+    credential: Optional[str] = None
 
 class ForgotPasswordRequest(BaseModel):
     email: str
@@ -189,17 +190,36 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 @app.post("/api/auth/google")
 def google_auth(req: GoogleLoginRequest, db: Session = Depends(get_db)):
     email_clean = (req.email or "").strip().lower()
+    display_name = (req.display_name or "").strip()
+    photo = req.photo_url
+
+    # Decode Google ID Token if passed via Google Identity Services
+    if req.credential:
+        try:
+            import base64
+            parts = req.credential.split(".")
+            if len(parts) >= 2:
+                padding = 4 - len(parts[1]) % 4
+                padded = parts[1] + ("=" * (padding % 4))
+                payload = json.loads(base64.urlsafe_b64decode(padded.encode()).decode())
+                if payload.get("email"):
+                    email_clean = payload["email"].strip().lower()
+                if payload.get("name"):
+                    display_name = payload["name"].strip()
+                if payload.get("picture"):
+                    photo = payload["picture"]
+        except Exception as e:
+            print("Notice: Credential decode fallback:", e)
+
     if not email_clean or "@" not in email_clean:
         raise HTTPException(status_code=400, detail="A valid Google email address is required.")
         
-    display_name = (req.display_name or "").strip()
     if not display_name:
         display_name = email_clean.split("@")[0].replace(".", " ").title()
         
     user = db.query(User).filter(User.email == email_clean).first()
     is_new = False
     
-    photo = req.photo_url
     if not photo:
         photo = f"https://api.dicebear.com/7.x/initials/svg?seed={quote(display_name)}&backgroundColor=0284c7,ea580c,16a34a,7c3aed"
         

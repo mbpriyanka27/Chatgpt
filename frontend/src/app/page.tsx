@@ -138,12 +138,11 @@ export default function ChatGPTApp() {
     return null;
   };
 
-  // Initial authentication & session check with self-healing validation
+  // Initial authentication & session check with real-time validation
   useEffect(() => {
     const initAuth = async () => {
-      const isExplicitLogout = typeof window !== 'undefined' && localStorage.getItem('chatgpt_logged_out') === 'true';
       const savedToken = typeof window !== 'undefined' ? localStorage.getItem('chatgpt_token') : null;
-      if (savedToken && !isExplicitLogout) {
+      if (savedToken) {
         try {
           const res = await fetch(`${API_BASE_URL}/api/auth/me`, {
             headers: { Authorization: `Bearer ${savedToken}` }
@@ -155,14 +154,12 @@ export default function ChatGPTApp() {
             return;
           }
         } catch (e) {
-          // Fall through to auto-login
+          // Token invalid or expired
         }
       }
-      if (isExplicitLogout) {
-        setIsGoogleAuthOpen(true);
-      } else {
-        await autoLoginDivya();
-      }
+      
+      // If not authenticated, open authentic Google Sign-In dialog
+      setIsGoogleAuthOpen(true);
     };
 
     initAuth();
@@ -258,7 +255,7 @@ export default function ChatGPTApp() {
 
   const handleNewChat = async () => {
     if (!token) {
-      setIsAuthOpen(true);
+      setIsGoogleAuthOpen(true);
       return;
     }
     setActiveChatId(null);
@@ -328,7 +325,7 @@ export default function ChatGPTApp() {
     const text = (textToSend !== undefined ? textToSend : inputPrompt).trim();
     if (!text || isStreaming) return;
     if (!token) {
-      setIsAuthOpen(true);
+      setIsGoogleAuthOpen(true);
       return;
     }
 

@@ -15,6 +15,7 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="stylesheet" href="/tailwind.css" />
+        <script src="https://accounts.google.com/gsi/client" async defer></script>
       </head>
       <body className="antialiased bg-[#0e0e17] text-[#ececf1]">{children}</body>
     </html>
