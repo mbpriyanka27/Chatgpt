@@ -6,7 +6,8 @@ import {
   CopyIcon, RegenerateIcon, ThumbsUpIcon, ThumbsDownIcon,
   DownloadIcon, MenuIcon, CheckIcon, EditIcon, FileTextIcon,
   MicIcon, MicOffIcon, SpeakerIcon, ImageIcon, HeadphoneIcon,
-  SlidersIcon, VoiceWaveIcon, PdfIcon, PlusIcon, CloseIcon
+  SlidersIcon, VoiceWaveIcon, PdfIcon, PlusIcon, CloseIcon,
+  SunIcon, MoonIcon, GhostIcon
 } from '../components/Icons';
 import { Sidebar, ChatItem } from '../components/Sidebar';
 import { MarkdownRenderer } from '../components/MarkdownRenderer';
@@ -39,6 +40,10 @@ export default function ChatGPTApp() {
   const [selectedModel, setSelectedModel] = useState('llama-3.3-70b-versatile');
   const [docCount, setDocCount] = useState(0);
 
+  // Theme & Temporary Chat States
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [isTemporaryChat, setIsTemporaryChat] = useState(false);
+
   // Audio, Voice & Media States
   const [isVoiceModalOpen, setIsVoiceModalOpen] = useState(false);
   const [isListeningMic, setIsListeningMic] = useState(false);
@@ -61,6 +66,22 @@ export default function ChatGPTApp() {
   const abortControllerRef = useRef<AbortController | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Load saved theme
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('chatgpt_theme') as 'light' | 'dark';
+      if (saved) setTheme(saved);
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const next = theme === 'light' ? 'dark' : 'light';
+    setTheme(next);
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('chatgpt_theme', next);
+    }
+  };
 
   // Direct file attachment handler
   const handleDirectFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -355,13 +376,14 @@ export default function ChatGPTApp() {
           Authorization: `Bearer ${currentToken}`
         },
         body: JSON.stringify({
-          chat_id: activeChatId,
+          chat_id: isTemporaryChat ? undefined : activeChatId,
           prompt: text,
           use_rag: useRag || !!attachedDoc,
           attached_document: attachedDoc ? attachedDoc.name : undefined,
           model: selectedModel,
           temperature: user?.temperature || 0.7,
           is_image_request: isImgReq,
+          is_temporary: isTemporaryChat,
           api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
         }),
         signal: abortController.signal
@@ -379,13 +401,14 @@ export default function ChatGPTApp() {
               Authorization: `Bearer ${freshToken}`
             },
             body: JSON.stringify({
-              chat_id: activeChatId,
+              chat_id: isTemporaryChat ? undefined : activeChatId,
               prompt: text,
               use_rag: useRag || !!attachedDoc,
               attached_document: attachedDoc ? attachedDoc.name : undefined,
               model: selectedModel,
               temperature: user?.temperature || 0.7,
               is_image_request: isImgReq,
+              is_temporary: isTemporaryChat,
               api_key: typeof window !== 'undefined' ? localStorage.getItem('chatgpt_api_key') || '' : ''
             }),
             signal: abortController.signal
@@ -416,7 +439,7 @@ export default function ChatGPTApp() {
               try {
                 const payload = JSON.parse(line.slice(6));
                 if (payload.event === 'start') {
-                  if (payload.chat_id && !activeChatId) {
+                  if (payload.chat_id && !activeChatId && !isTemporaryChat) {
                     setActiveChatId(payload.chat_id);
                     loadChats();
                   }
@@ -462,7 +485,9 @@ export default function ChatGPTApp() {
     } finally {
       setIsStreaming(false);
       abortControllerRef.current = null;
-      loadChats();
+      if (!isTemporaryChat) {
+        loadChats();
+      }
     }
   };
 
@@ -736,42 +761,85 @@ export default function ChatGPTApp() {
         onGoogleLogin={() => setIsGoogleAuthOpen(true)}
         isOpenMobile={isMobileSidebarOpen}
         onCloseMobile={() => setIsMobileSidebarOpen(false)}
+        theme={theme}
       />
 
       {/* Main Chat Canvas */}
-      <main className="flex-1 flex flex-col h-full bg-white relative overflow-hidden">
+      <main className={`flex-1 flex flex-col h-full relative overflow-hidden transition-colors ${theme === 'dark' ? 'bg-[#212121] text-[#ececf1]' : 'bg-white text-[#111827]'}`}>
         {/* Top Header Bar */}
-        <header className="flex items-center justify-between px-6 py-3.5 bg-white border-b border-transparent z-20">
+        <header className={`flex items-center justify-between px-6 py-3.5 border-b z-20 transition-colors ${theme === 'dark' ? 'bg-[#212121] border-[#2f2f2f]' : 'bg-white border-transparent'}`}>
           <div className="flex items-center gap-2">
             <button
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 mr-1"
+              className={`lg:hidden p-1.5 rounded-lg mr-1 ${theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'}`}
             >
               <MenuIcon className="w-5 h-5" />
             </button>
 
-            {/* Pill Group: Chat and + Work */}
-            <button className="px-3.5 py-1.5 rounded-full text-xs font-semibold bg-[#ECECF1] text-[#0D0D0D] hover:bg-[#E2E2E8] transition-colors">
+            {/* Pill Group: Chat, + Work, and Temporary Chat */}
+            <button className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors ${
+              theme === 'dark' ? 'bg-[#2f2f2f] text-white hover:bg-[#383838]' : 'bg-[#ECECF1] text-[#0D0D0D] hover:bg-[#E2E2E8]'
+            }`}>
               Chat
             </button>
 
             <button
               onClick={() => setIsDocsOpen(true)}
-              className="px-3 py-1.5 rounded-full text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 border border-gray-200 transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-colors flex items-center gap-1 shadow-xs cursor-pointer ${
+                theme === 'dark' ? 'bg-[#212121] text-gray-300 hover:bg-[#2f2f2f] border-[#383838]' : 'bg-white hover:bg-gray-50 text-gray-600 border-gray-200'
+              }`}
               title="Ground chat with uploaded documents & workspace files"
             >
-              <span className="text-gray-500 font-bold">+</span>
+              <span className="text-gray-400 font-bold">+</span>
               <span>Work</span>
               <span className="text-[10px] text-gray-400">▾</span>
+            </button>
+
+            {/* Temporary Chat Toggle Button */}
+            <button
+              onClick={() => {
+                const next = !isTemporaryChat;
+                setIsTemporaryChat(next);
+                if (next) {
+                  setActiveChatId(null);
+                  setMessages([]);
+                }
+              }}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all flex items-center gap-1.5 shadow-xs cursor-pointer ${
+                isTemporaryChat
+                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40 font-semibold'
+                  : theme === 'dark'
+                  ? 'bg-[#212121] text-gray-400 hover:text-white border border-[#383838]'
+                  : 'bg-white hover:bg-gray-50 text-gray-600 border border-gray-200'
+              }`}
+              title={isTemporaryChat ? 'Temporary Chat is ON' : 'Turn on Temporary Chat (not saved)'}
+            >
+              <GhostIcon className={`w-3.5 h-3.5 ${isTemporaryChat ? 'text-amber-500' : 'text-gray-400'}`} />
+              <span>{isTemporaryChat ? 'Temporary ON' : 'Temporary'}</span>
             </button>
           </div>
 
           {/* Top Right Action Icons */}
           <div className="flex items-center gap-1.5">
+            {/* Theme Toggle (Light / Dark Mood) */}
+            <button
+              onClick={toggleTheme}
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                theme === 'dark'
+                  ? 'text-yellow-400 hover:text-yellow-300 hover:bg-[#2f2f2f]'
+                  : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+              title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
+            >
+              {theme === 'dark' ? <SunIcon className="w-4 h-4" /> : <MoonIcon className="w-4 h-4" />}
+            </button>
+
             {/* Sliders / Settings Button */}
             <button
               onClick={() => setIsSettingsOpen(true)}
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
               title="Settings & Model Selection"
             >
               <SlidersIcon className="w-4 h-4" />
@@ -780,7 +848,9 @@ export default function ChatGPTApp() {
             {/* New Chat Top Right Shortcut */}
             <button
               onClick={handleNewChat}
-              className="p-2 rounded-lg text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors"
+              className={`p-2 rounded-lg transition-colors cursor-pointer ${
+                theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#2f2f2f]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+              }`}
               title="New Chat"
             >
               <PlusIcon className="w-4 h-4" />
@@ -788,19 +858,39 @@ export default function ChatGPTApp() {
           </div>
         </header>
 
+        {/* Temporary Chat Notice Banner */}
+        {isTemporaryChat && (
+          <div className={`px-6 py-2 flex items-center justify-between text-xs border-b font-sans transition-colors ${
+            theme === 'dark' ? 'bg-amber-950/30 border-amber-900/40 text-amber-300' : 'bg-amber-50 border-amber-200 text-amber-800'
+          }`}>
+            <div className="flex items-center gap-2">
+              <GhostIcon className="w-4 h-4 flex-shrink-0 text-amber-500" />
+              <span>
+                <strong>Temporary Chat</strong>: This conversation won't appear in your history, use memories, or be saved once you close it.
+              </span>
+            </div>
+            <button
+              onClick={() => setIsTemporaryChat(false)}
+              className="text-xs font-semibold hover:underline cursor-pointer"
+            >
+              Turn off
+            </button>
+          </div>
+        )}
+
         {/* Message Feed / Workspace */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 scrollbar-thin bg-white">
+        <div className={`flex-1 overflow-y-auto px-6 py-4 scrollbar-thin transition-colors ${theme === 'dark' ? 'bg-[#212121]' : 'bg-white'}`}>
           <div className="max-w-3xl mx-auto space-y-6 pt-2">
             {messages.length === 0 ? (
-              /* Clean Active ChatGPT Home View (No hardcoded reference text) */
+              /* Clean Active ChatGPT Home View */
               <div className="flex flex-col items-center justify-center min-h-[55vh] text-center px-4 my-auto">
-                <div className="w-12 h-12 rounded-2xl bg-black text-white flex items-center justify-center shadow-md mb-4">
+                <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shadow-md mb-4 ${theme === 'dark' ? 'bg-[#2f2f2f] text-white' : 'bg-black text-white'}`}>
                   <SparklesIcon className="w-6 h-6 text-white" />
                 </div>
-                <h1 className="text-2xl font-bold text-[#111827] mb-2 tracking-tight">
+                <h1 className={`text-2xl font-bold mb-2 tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#111827]'}`}>
                   What can I help with today?
                 </h1>
-                <p className="text-sm text-gray-500 max-w-md mb-8">
+                <p className={`text-sm max-w-md mb-8 ${theme === 'dark' ? 'text-gray-400' : 'text-gray-500'}`}>
                   Ask anything, ground answers with your data, create AI images, or start hands-free voice chat.
                 </p>
 
@@ -808,52 +898,60 @@ export default function ChatGPTApp() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 w-full max-w-xl text-left">
                   <button
                     onClick={() => handleSendMessage('/image A beautiful cinematic cyberpunk Bangalore skyline with rain and neon lights')}
-                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    }`}
                   >
-                    <div className="text-xs font-semibold text-gray-900 group-hover:text-emerald-700 flex items-center gap-1.5 mb-1">
+                    <div className="text-xs font-semibold group-hover:text-emerald-500 flex items-center gap-1.5 mb-1">
                       <span>🎨</span>
                       <span>Generate an AI image</span>
                     </div>
-                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                    <div className="text-[12px] text-gray-400 line-clamp-1">
                       Cyberpunk Bangalore skyline in neon rain
                     </div>
                   </button>
 
                   <button
                     onClick={() => fileInputRef.current?.click()}
-                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    }`}
                   >
-                    <div className="text-xs font-semibold text-gray-900 group-hover:text-teal-700 flex items-center gap-1.5 mb-1">
+                    <div className="text-xs font-semibold group-hover:text-teal-500 flex items-center gap-1.5 mb-1">
                       <span>📄</span>
                       <span>Attach & Analyze Document</span>
                     </div>
-                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                    <div className="text-[12px] text-gray-400 line-clamp-1">
                       Upload PDF, DOCX, or CSV data for RAG answers
                     </div>
                   </button>
 
                   <button
                     onClick={() => handleSendMessage('Brainstorm 5 innovative startup ideas combining Agentic AI and healthcare in India')}
-                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    }`}
                   >
-                    <div className="text-xs font-semibold text-gray-900 group-hover:text-indigo-700 flex items-center gap-1.5 mb-1">
+                    <div className="text-xs font-semibold group-hover:text-indigo-400 flex items-center gap-1.5 mb-1">
                       <span>💡</span>
                       <span>Brainstorm ideas</span>
                     </div>
-                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                    <div className="text-[12px] text-gray-400 line-clamp-1">
                       Agentic AI startup ideas in healthcare
                     </div>
                   </button>
 
                   <button
                     onClick={() => setIsVoiceModalOpen(true)}
-                    className="p-3.5 rounded-2xl border border-gray-200 hover:border-gray-300 hover:bg-gray-50 transition-all text-left shadow-2xs group cursor-pointer"
+                    className={`p-3.5 rounded-2xl border transition-all text-left shadow-2xs group cursor-pointer ${
+                      theme === 'dark' ? 'bg-[#262626] border-[#333333] hover:bg-[#2f2f2f] text-white' : 'bg-white border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-900'
+                    }`}
                   >
-                    <div className="text-xs font-semibold text-gray-900 group-hover:text-emerald-700 flex items-center gap-1.5 mb-1">
+                    <div className="text-xs font-semibold group-hover:text-emerald-500 flex items-center gap-1.5 mb-1">
                       <span>🎙️</span>
                       <span>Interactive Voice Chat</span>
                     </div>
-                    <div className="text-[12px] text-gray-500 line-clamp-1">
+                    <div className="text-[12px] text-gray-400 line-clamp-1">
                       Hands-free fluid orb in Kannada or English
                     </div>
                   </button>
@@ -867,14 +965,16 @@ export default function ChatGPTApp() {
                   <div key={msg.id || idx} className="group text-sm leading-relaxed">
                     {isUser ? (
                       <div className="flex justify-end mb-4">
-                        <div className="bg-[#f4f4f4] text-[#111827] rounded-3xl px-5 py-3 max-w-[85%] text-[15px] font-normal leading-relaxed whitespace-pre-wrap">
+                        <div className={`rounded-3xl px-5 py-3 max-w-[85%] text-[15px] font-normal leading-relaxed whitespace-pre-wrap ${
+                          theme === 'dark' ? 'bg-[#2f2f2f] text-[#ececf1]' : 'bg-[#f4f4f4] text-[#111827]'
+                        }`}>
                           {msg.content}
                         </div>
                       </div>
                     ) : (
                       <div className="space-y-4">
                         {/* Markdown rendered assistant message */}
-                        <div className="text-[#1F2937] leading-relaxed text-[15px]">
+                        <div className={`leading-relaxed text-[15px] ${theme === 'dark' ? 'text-[#ececf1]' : 'text-[#1F2937]'}`}>
                           <MarkdownRenderer content={msg.content} />
                           {isStreaming && msg === messages[messages.length - 1] && (
                             <span className="inline-block w-2 h-4 ml-1 bg-emerald-500 animate-pulse align-middle" />
@@ -883,8 +983,8 @@ export default function ChatGPTApp() {
 
                         {/* RAG Source Citation Chips if present */}
                         {msg.sources && msg.sources.length > 0 && (
-                          <div className="mt-3 pt-2 border-t border-gray-100">
-                            <div className="text-[11px] font-semibold text-teal-700 mb-1.5 flex items-center gap-1.5">
+                          <div className={`mt-3 pt-2 border-t ${theme === 'dark' ? 'border-[#2f2f2f]' : 'border-gray-100'}`}>
+                            <div className="text-[11px] font-semibold text-teal-500 mb-1.5 flex items-center gap-1.5">
                               <FileTextIcon className="w-3.5 h-3.5" />
                               <span>Sources Grounding ({msg.sources.length}):</span>
                             </div>
@@ -898,13 +998,15 @@ export default function ChatGPTApp() {
                                       [`${msg.id}-${sIdx}`]: !prev[`${msg.id}-${sIdx}`]
                                     }))
                                   }
-                                  className="cursor-pointer px-2.5 py-1 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-xs text-teal-800 transition-colors"
+                                  className={`cursor-pointer px-2.5 py-1 rounded-lg border text-xs transition-colors ${
+                                    theme === 'dark' ? 'bg-teal-950/40 border-teal-800 text-teal-300' : 'bg-teal-50 hover:bg-teal-100 border-teal-200 text-teal-800'
+                                  }`}
                                 >
                                   <div className="font-mono text-[11px]">
                                     📄 {src.filename} • p.{src.page}
                                   </div>
                                   {expandedSources[`${msg.id}-${sIdx}`] && (
-                                    <div className="mt-1.5 pt-1.5 border-t border-teal-200 text-[11px] text-gray-700 italic">
+                                    <div className="mt-1.5 pt-1.5 border-t border-teal-200/50 text-[11px] text-gray-300 italic">
                                       "{src.snippet}"
                                     </div>
                                   )}
@@ -918,13 +1020,15 @@ export default function ChatGPTApp() {
                         <div className="flex items-center gap-2 pt-1 text-xs">
                           <button
                             onClick={() => handleCopyMessage(msg.content, msg.id)}
-                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
+                              theme === 'dark' ? 'bg-[#262626] hover:bg-[#2f2f2f] border-[#383838] text-gray-300' : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
+                            }`}
                             title="Copy message"
                           >
                             {copiedMsgId === msg.id ? (
                               <CheckIcon className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <CopyIcon className="w-3.5 h-3.5 text-gray-500" />
+                              <CopyIcon className="w-3.5 h-3.5 text-gray-400" />
                             )}
                             <span>{copiedMsgId === msg.id ? 'Copied' : 'Copy'}</span>
                           </button>
@@ -934,6 +1038,8 @@ export default function ChatGPTApp() {
                             className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
                               speakingMsgId === msg.id
                                 ? 'bg-emerald-50 border-emerald-300 text-emerald-700 animate-pulse'
+                                : theme === 'dark'
+                                ? 'bg-[#262626] hover:bg-[#2f2f2f] border-[#383838] text-gray-300'
                                 : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
                             }`}
                             title="Read aloud"
@@ -941,17 +1047,19 @@ export default function ChatGPTApp() {
                             {speakingMsgId === msg.id ? (
                               <StopIcon className="w-3.5 h-3.5 text-emerald-600" />
                             ) : (
-                              <SpeakerIcon className="w-3.5 h-3.5 text-gray-500" />
+                              <SpeakerIcon className="w-3.5 h-3.5 text-gray-400" />
                             )}
                             <span>{speakingMsgId === msg.id ? 'Stop' : 'Listen'}</span>
                           </button>
 
                           <button
                             onClick={() => setIsDocsOpen(true)}
-                            className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-xs font-medium text-gray-700 transition-colors shadow-xs"
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-full border text-xs font-medium transition-colors shadow-xs ${
+                              theme === 'dark' ? 'bg-[#262626] hover:bg-[#2f2f2f] border-[#383838] text-gray-300' : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-700'
+                            }`}
                             title="Inspect Document Grounding and RAG X-Ray"
                           >
-                            <SparklesIcon className="w-3.5 h-3.5 text-indigo-500" />
+                            <SparklesIcon className="w-3.5 h-3.5 text-indigo-400" />
                             <span>X-Ray RAG</span>
                           </button>
 
@@ -960,10 +1068,12 @@ export default function ChatGPTApp() {
                               const prevPrompt = messages[idx - 1]?.content || 'Continue';
                               handleSendMessage(prevPrompt);
                             }}
-                            className="p-1.5 rounded-full bg-white hover:bg-gray-100 border border-gray-200 text-gray-600 hover:text-gray-900 transition-colors shadow-xs"
+                            className={`p-1.5 rounded-full border transition-colors shadow-xs ${
+                              theme === 'dark' ? 'bg-[#262626] hover:bg-[#2f2f2f] border-[#383838] text-gray-400 hover:text-white' : 'bg-white hover:bg-gray-100 border-gray-200 text-gray-600 hover:text-gray-900'
+                            }`}
                             title="Regenerate response"
                           >
-                            <RegenerateIcon className="w-3.5 h-3.5 text-gray-500" />
+                            <RegenerateIcon className="w-3.5 h-3.5 text-gray-400" />
                           </button>
                         </div>
                       </div>
@@ -1000,16 +1110,18 @@ export default function ChatGPTApp() {
         )}
 
         {/* Bottom Floating Attached Document & Floating Input Area */}
-        <div className="w-full bg-white px-4 pb-4 pt-1">
+        <div className={`w-full px-4 pb-4 pt-1 transition-colors ${theme === 'dark' ? 'bg-[#212121]' : 'bg-white'}`}>
           <div className="max-w-3xl mx-auto">
             {/* Attached document chip above the input bar */}
             {attachedDoc && (
-              <div className="flex items-center gap-3 bg-white border border-gray-200/90 rounded-2xl px-3.5 py-2.5 shadow-xs max-w-sm mb-2.5 transition-all">
-                <div className="w-8 h-8 rounded-lg bg-red-50 flex items-center justify-center text-red-500 flex-shrink-0">
+              <div className={`flex items-center gap-3 rounded-2xl px-3.5 py-2.5 shadow-xs max-w-sm mb-2.5 transition-all ${
+                theme === 'dark' ? 'bg-[#2a2a2a] border border-[#383838] text-white' : 'bg-white border border-gray-200/90 text-gray-800'
+              }`}>
+                <div className="w-8 h-8 rounded-lg bg-red-500/10 flex items-center justify-center text-red-500 flex-shrink-0">
                   <PdfIcon className="w-5 h-5 text-red-500" />
                 </div>
                 <div className="flex-1 min-w-0 pr-1">
-                  <div className="text-xs font-semibold text-gray-800 truncate">
+                  <div className={`text-xs font-semibold truncate ${theme === 'dark' ? 'text-white' : 'text-gray-800'}`}>
                     {attachedDoc.name}
                   </div>
                   <div className="text-[10px] text-gray-400 font-medium tracking-wider uppercase">
@@ -1018,7 +1130,9 @@ export default function ChatGPTApp() {
                 </div>
                 <button
                   onClick={() => setAttachedDoc(null)}
-                  className="p-1 rounded-full text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors cursor-pointer"
+                  className={`p-1 rounded-full transition-colors cursor-pointer ${
+                    theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#383838]' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
+                  }`}
                   title="Remove document"
                 >
                   <CloseIcon className="w-3.5 h-3.5" />
@@ -1027,11 +1141,17 @@ export default function ChatGPTApp() {
             )}
 
             {/* Floating Capsule Input Bar */}
-            <div className="relative flex items-center bg-white rounded-full border border-gray-200 shadow-[0_2px_14px_rgba(0,0,0,0.06)] px-3.5 py-1.5 w-full focus-within:border-gray-300">
+            <div className={`relative flex items-center rounded-full border px-3.5 py-1.5 w-full transition-all ${
+              theme === 'dark'
+                ? 'bg-[#2f2f2f] border-[#3f3f3f] shadow-[0_2px_14px_rgba(0,0,0,0.3)] focus-within:border-gray-500'
+                : 'bg-white border-gray-200 shadow-[0_2px_14px_rgba(0,0,0,0.06)] focus-within:border-gray-300'
+            }`}>
               <button
                 onClick={() => fileInputRef.current?.click()}
                 title="Attach file or document (PDF, DOCX, TXT, CSV)"
-                className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors flex-shrink-0 cursor-pointer"
+                className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors flex-shrink-0 cursor-pointer ${
+                  theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                }`}
               >
                 <PlusIcon className="w-5 h-5" />
               </button>
@@ -1047,15 +1167,19 @@ export default function ChatGPTApp() {
                     handleSendMessage();
                   }
                 }}
-                placeholder="Ask anything"
-                className="flex-1 bg-transparent text-[14px] text-gray-800 placeholder-gray-400 focus:outline-none px-3 py-1 font-sans"
+                placeholder={isTemporaryChat ? "Ask anything in temporary chat..." : "Ask anything"}
+                className={`flex-1 bg-transparent text-[14px] focus:outline-none px-3 py-1 font-sans ${
+                  theme === 'dark' ? 'text-white placeholder-gray-400' : 'text-gray-800 placeholder-gray-400'
+                }`}
               />
 
               <div className="flex items-center gap-1.5 flex-shrink-0">
                 <button
                   onClick={() => setIsVoiceModalOpen(true)}
                   title="ChatGPT Voice Mode (Interactive Fluid Circle)"
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-gray-500 hover:text-gray-800 hover:bg-gray-100 transition-colors cursor-pointer"
+                  className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                    theme === 'dark' ? 'text-gray-400 hover:text-white hover:bg-[#3a3a3a]' : 'text-gray-500 hover:text-gray-800 hover:bg-gray-100'
+                  }`}
                 >
                   <MicIcon className="w-4 h-4" />
                 </button>

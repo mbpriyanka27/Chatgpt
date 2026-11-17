@@ -106,6 +106,7 @@ class ChatStreamRequest(BaseModel):
     is_voice_mode: Optional[bool] = False
     language: Optional[str] = None
     voice_language: Optional[str] = None
+    is_temporary: Optional[bool] = False
 
 class ImageGenerateRequest(BaseModel):
     prompt: str
@@ -450,33 +451,34 @@ def clear_all_chats(user: User = Depends(get_current_user), db: Session = Depend
 # ==========================================
 @app.post("/api/chat/stream")
 async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # 1. Resolve or create chat
+    # 1. Resolve or create chat (skip if temporary chat)
     chat = None
-    if req.chat_id:
-        chat = db.query(Chat).filter(Chat.id == req.chat_id, Chat.user_id == user.id).first()
-    if not chat:
-        title = req.prompt[:35] + "..." if len(req.prompt) > 35 else req.prompt
-        chat = Chat(user_id=user.id, title=title)
-        db.add(chat)
-        db.commit()
-        db.refresh(chat)
+    if not req.is_temporary:
+        if req.chat_id:
+            chat = db.query(Chat).filter(Chat.id == req.chat_id, Chat.user_id == user.id).first()
+        if not chat:
+            title = req.prompt[:35] + "..." if len(req.prompt) > 35 else req.prompt
+            chat = Chat(user_id=user.id, title=title)
+            db.add(chat)
+            db.commit()
+            db.refresh(chat)
 
-    # 2. Save user message to database
-    user_msg = Message(
-        chat_id=chat.id,
-        role="user",
-        content=req.prompt,
-        tokens=len(req.prompt.split())
-    )
-    db.add(user_msg)
-    chat.updated_at = datetime.datetime.utcnow()
-    db.commit()
+        # 2. Save user message to database
+        user_msg = Message(
+            chat_id=chat.id,
+            role="user",
+            content=req.prompt,
+            tokens=len(req.prompt.split())
+        )
+        db.add(user_msg)
+        chat.updated_at = datetime.datetime.utcnow()
+        db.commit()
 
     # 3. Assemble multi-turn history memory and detect language
     target_lang = detect_language(req.prompt, req.language or req.voice_language)
     lang_label = LANGUAGE_NAMES.get(target_lang, target_lang)
 
-    history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all()
+    history_messages = db.query(Message).filter(Message.chat_id == chat.id).order_by(Message.created_at).all() if chat else []
     if req.is_voice_mode:
         if target_lang != 'en':
             llm_messages = [{"role": "system", "content": f"You are ChatGPT in real-time voice mode. The user spoke in {lang_label}. You MUST reply ONLY in {lang_label}. Reply in 1 short sentence (under 15 words) in {lang_label}. Never use English. Never use asterisks, emojis, bullet points, or markdown formatting."}]
@@ -520,7 +522,7 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
 
     if img_prompt:
         async def sse_image_generator():
-            yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': []})}\n\n"
+            yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id if chat else None, 'message_id': assistant_msg_id, 'sources': []})}\n\n"
             notice = f"🎨 Generating your requested AI image for: **\"{img_prompt}\"**...\n\n"
             yield f"data: {json.dumps({'event': 'chunk', 'text': notice})}\n\n"
 
@@ -539,20 +541,21 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
                 yield f"data: {json.dumps({'event': 'chunk', 'text': err_text})}\n\n"
                 full_content = notice + err_text
 
-            db_session = SessionLocal()
-            try:
-                asst_msg = Message(
-                    id=assistant_msg_id,
-                    chat_id=chat.id,
-                    role="assistant",
-                    content=full_content,
-                    sources_json="[]",
-                    tokens=len(full_content.split())
-                )
-                db_session.add(asst_msg)
-                db_session.commit()
-            finally:
-                db_session.close()
+            if chat:
+                db_session = SessionLocal()
+                try:
+                    asst_msg = Message(
+                        id=assistant_msg_id,
+                        chat_id=chat.id,
+                        role="assistant",
+                        content=full_content,
+                        sources_json="[]",
+                        tokens=len(full_content.split())
+                    )
+                    db_session.add(asst_msg)
+                    db_session.commit()
+                finally:
+                    db_session.close()
 
             yield f"data: {json.dumps({'event': 'end', 'full_text': full_content})}\n\n"
 
@@ -561,7 +564,7 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
     async def sse_event_generator():
         collected_chunks = []
         # Initial metadata event: chat_id, message_id, sources, target_lang
-        yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id, 'message_id': assistant_msg_id, 'sources': sources, 'target_lang': target_lang})}\n\n"
+        yield f"data: {json.dumps({'event': 'start', 'chat_id': chat.id if chat else None, 'message_id': assistant_msg_id, 'sources': sources, 'target_lang': target_lang})}\n\n"
         
         voice_token_limit = 35 if req.is_voice_mode else (req.max_tokens or 1024)
 
@@ -624,21 +627,22 @@ async def chat_stream(req: ChatStreamRequest, user: User = Depends(get_current_u
                     full_content = translated
                     yield f"data: {json.dumps({'event': 'replace', 'text': full_content})}\n\n"
 
-        # Save assistant message in DB with its own session
-        db_session = SessionLocal()
-        try:
-            asst_msg = Message(
-                id=assistant_msg_id,
-                chat_id=chat.id,
-                role="assistant",
-                content=full_content,
-                sources_json=json.dumps(sources),
-                tokens=len(full_content.split())
-            )
-            db_session.add(asst_msg)
-            db_session.commit()
-        finally:
-            db_session.close()
+        # Save assistant message in DB with its own session (if not temporary chat)
+        if chat:
+            db_session = SessionLocal()
+            try:
+                asst_msg = Message(
+                    id=assistant_msg_id,
+                    chat_id=chat.id,
+                    role="assistant",
+                    content=full_content,
+                    sources_json=json.dumps(sources),
+                    tokens=len(full_content.split())
+                )
+                db_session.add(asst_msg)
+                db_session.commit()
+            finally:
+                db_session.close()
 
         yield f"data: {json.dumps({'event': 'end', 'full_text': full_content})}\n\n"
 

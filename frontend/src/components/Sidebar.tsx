@@ -30,6 +30,7 @@ interface SidebarProps {
   onGoogleLogin?: () => void;
   isOpenMobile: boolean;
   onCloseMobile: () => void;
+  theme?: 'light' | 'dark';
 }
 
 export function Sidebar({
@@ -47,7 +48,8 @@ export function Sidebar({
   onOpenAuth,
   onGoogleLogin,
   isOpenMobile,
-  onCloseMobile
+  onCloseMobile,
+  theme = 'light'
 }: SidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingChatId, setEditingChatId] = useState<string | null>(null);
@@ -182,29 +184,33 @@ export function Sidebar({
       )}
 
       <aside
-        className={`fixed lg:static top-0 bottom-0 left-0 z-40 flex flex-col w-[260px] bg-[#F9F9F9] border-r border-[#E5E7EB] transition-transform duration-300 ease-in-out select-none ${
+        className={`fixed lg:static top-0 bottom-0 left-0 z-40 flex flex-col w-[260px] transition-all duration-300 ease-in-out select-none ${
+          theme === 'dark' ? 'bg-[#171717] border-r border-[#2f2f2f] text-[#ececf1]' : 'bg-[#F9F9F9] border-r border-[#E5E7EB] text-[#111827]'
+        } ${
           isOpenMobile ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
         }`}
       >
         {/* Top Header / Branding (ChatGPT Cloud) */}
-        <div className="flex items-center justify-between px-4 py-3.5 border-b border-gray-200/60">
+        <div className={`flex items-center justify-between px-4 py-3.5 border-b ${
+          theme === 'dark' ? 'border-[#2f2f2f]' : 'border-gray-200/60'
+        }`}>
           <div className="flex items-center gap-1.5 cursor-pointer" onClick={onNewChat}>
-            <span className="font-bold text-[17px] tracking-tight text-[#0D0D0D]">ChatGPT</span>
+            <span className={`font-bold text-[17px] tracking-tight ${theme === 'dark' ? 'text-white' : 'text-[#0D0D0D]'}`}>ChatGPT</span>
             <span className="font-bold text-[17px] tracking-tight text-[#0D9488]">Cloud</span>
           </div>
 
-          <div className="flex items-center gap-1 text-[#6B7280]">
+          <div className={`flex items-center gap-1 ${theme === 'dark' ? 'text-gray-400' : 'text-[#6B7280]'}`}>
             <button
               onClick={() => setIsSearchOpen(!isSearchOpen)}
               title="Search chats"
-              className="p-1.5 rounded-lg hover:bg-gray-200/70 hover:text-black transition-colors"
+              className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-[#262626] hover:text-white' : 'hover:bg-gray-200/70 hover:text-black'}`}
             >
               <SearchIcon className="w-4 h-4" />
             </button>
             <button
               onClick={onCloseMobile}
               title="Sidebar controls"
-              className="p-1.5 rounded-lg hover:bg-gray-200/70 hover:text-black transition-colors"
+              className={`p-1.5 rounded-lg transition-colors ${theme === 'dark' ? 'hover:bg-[#262626] hover:text-white' : 'hover:bg-gray-200/70 hover:text-black'}`}
             >
               <SidebarCollapseIcon className="w-4 h-4" />
             </button>
@@ -218,7 +224,9 @@ export function Sidebar({
               onNewChat();
               onCloseMobile();
             }}
-            className="w-full flex items-center justify-between px-3 py-2.5 rounded-xl bg-[#ECECF1] hover:bg-[#E5E7EB] text-[#1F2937] font-medium text-sm transition-all shadow-xs group"
+            className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl border font-semibold text-xs transition-all shadow-2xs group cursor-pointer ${
+              theme === 'dark' ? 'bg-[#212121] hover:bg-[#262626] border-[#2f2f2f] text-white' : 'bg-white hover:bg-gray-50 border-gray-200 text-[#111827]'
+            }`}
           >
             <div className="flex items-center gap-2.5">
               <NewChatPenIcon className="w-4 h-4 text-[#4B5563]" />
@@ -273,17 +281,23 @@ export function Sidebar({
         </div>
 
         {/* Bottom User Profile & Google Login Section */}
-        <div className="p-3 border-t border-gray-200/80 bg-[#F9F9F9] relative">
+        <div className={`p-3 border-t relative transition-colors ${
+          theme === 'dark' ? 'border-[#2f2f2f] bg-[#171717]' : 'border-gray-200/80 bg-[#F9F9F9]'
+        }`}>
           {user ? (
             <div className="flex items-center justify-between">
               {userMenuOpen && (
-                <div className="absolute bottom-16 left-2 right-2 bg-white border border-gray-200 rounded-xl shadow-xl p-2 space-y-1 z-50 text-xs font-sans">
+                <div className={`absolute bottom-16 left-2 right-2 border rounded-xl shadow-xl p-2 space-y-1 z-50 text-xs font-sans ${
+                  theme === 'dark' ? 'bg-[#212121] border-[#383838] text-white' : 'bg-white border-gray-200 text-gray-900'
+                }`}>
                   {/* Google Profile Header */}
-                  <div className="px-2.5 py-1.5 pb-2 mb-1 border-b border-gray-100">
-                    <div className="text-[11px] font-bold text-gray-900 truncate">
+                  <div className={`px-2.5 py-1.5 pb-2 mb-1 border-b ${
+                    theme === 'dark' ? 'border-[#2f2f2f]' : 'border-gray-100'
+                  }`}>
+                    <div className={`text-[11px] font-bold truncate ${theme === 'dark' ? 'text-white' : 'text-gray-900'}`}>
                       {user.display_name || 'Google User'}
                     </div>
-                    <div className="text-[10px] text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                    <div className="text-[10px] text-gray-400 truncate flex items-center gap-1 mt-0.5">
                       <GoogleIcon className="w-3 h-3 flex-shrink-0" />
                       <span className="truncate">{user.email || 'divya.gadwal@gmail.com'}</span>
                     </div>
