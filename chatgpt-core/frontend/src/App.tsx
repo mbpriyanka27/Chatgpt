@@ -1,113 +1,220 @@
-import React from 'react';
-import { AppShell } from './components/layout/AppShell';
-import { Badge } from './components/ui/Badge';
-import { Button } from './components/ui/Button';
-import { useHealth } from './hooks/useHealth';
+import React, { useState, useEffect } from 'react';
+import { Sidebar } from './components/sidebar/Sidebar';
+import { ChatHeader } from './components/chat/ChatHeader';
+import { WelcomeScreen } from './components/chat/WelcomeScreen';
+import { MessageList } from './components/chat/MessageList';
+import { ChatInput } from './components/chat/ChatInput';
+import { Conversation, Message } from './types/chat';
+
+const INITIAL_CONVERSATIONS: Conversation[] = [
+  {
+    id: 'conv-1',
+    title: 'React 19 Server Components Design',
+    dateGroup: 'Today',
+    updatedAt: '10:30 AM',
+    messages: [
+      {
+        id: 'm1',
+        role: 'user',
+        content: 'How do React 19 Server Actions simplify form submissions without external state libraries?',
+        timestamp: '10:28 AM'
+      },
+      {
+        id: 'm2',
+        role: 'assistant',
+        content: 'React 19 introduces native Server Actions alongside hooks like `useActionState` and `useFormStatus`.\n\nKey advantages:\n- **Zero Client Bundle**: The action runs directly on the server, eliminating the need to ship heavy client-side API clients.\n- **Progressive Enhancement**: Forms work even before client JavaScript hydrates.\n- **Built-in Pending State**: `isPending` automatically tracks submission progress without manual boolean flags.',
+        timestamp: '10:30 AM'
+      }
+    ]
+  },
+  {
+    id: 'conv-2',
+    title: 'FastAPI High-Concurrency Microservices',
+    dateGroup: 'Yesterday',
+    updatedAt: 'Yesterday',
+    messages: [
+      {
+        id: 'm3',
+        role: 'user',
+        content: 'What is the most efficient way to stream Server-Sent Events in FastAPI?',
+        timestamp: 'Yesterday'
+      },
+      {
+        id: 'm4',
+        role: 'assistant',
+        content: 'In FastAPI, use `StreamingResponse` with an async generator:\n\n```python\nfrom fastapi.responses import StreamingResponse\n\nasync def event_generator():\n    for token in tokens:\n        yield f"data: {token}\\n\\n"\n\nreturn StreamingResponse(event_generator(), media_type="text/event-stream")\n```\n\nThis keeps memory constant and delivers tokens with near-zero latency.',
+        timestamp: 'Yesterday'
+      }
+    ]
+  },
+  {
+    id: 'conv-3',
+    title: 'Monochrome Minimalist UI System',
+    dateGroup: 'Previous 7 Days',
+    updatedAt: '3 days ago',
+    messages: [
+      {
+        id: 'm5',
+        role: 'user',
+        content: 'Explain the psychology behind minimal black and white user interfaces.',
+        timestamp: '3 days ago'
+      },
+      {
+        id: 'm6',
+        role: 'assistant',
+        content: 'Monochrome design removes cognitive noise. By eliminating distracting saturated palettes, user focus shifts entirely to typography, content hierarchy, and information density.',
+        timestamp: '3 days ago'
+      }
+    ]
+  }
+];
 
 export function App() {
-  const { health, isLoading, error, refetch } = useHealth();
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [conversations, setConversations] = useState<Conversation[]>(INITIAL_CONVERSATIONS);
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [inputPrompt, setInputPrompt] = useState('');
+
+  // Auto close sidebar on narrow mobile screens on load
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  }, []);
+
+  const handleNewChat = () => {
+    setActiveId(null);
+    setMessages([]);
+    setInputPrompt('');
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setIsSidebarOpen(false);
+    }
+  };
+
+  const handleSelectConversation = (id: string) => {
+    const found = conversations.find(c => c.id === id);
+    if (found) {
+      setActiveId(found.id);
+      setMessages(found.messages);
+      if (typeof window !== 'undefined' && window.innerWidth < 768) {
+        setIsSidebarOpen(false);
+      }
+    }
+  };
+
+  const handleDeleteConversation = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setConversations(prev => prev.filter(c => c.id !== id));
+    if (activeId === id) {
+      handleNewChat();
+    }
+  };
+
+  const handleSendMessage = (customPrompt?: string) => {
+    const textToSend = (customPrompt || inputPrompt).trim();
+    if (!textToSend) return;
+
+    const userMessage: Message = {
+      id: `msg-${Date.now()}`,
+      role: 'user',
+      content: textToSend,
+      timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInputPrompt('');
+
+    // Update or create active conversation
+    let currentId = activeId;
+    if (!currentId) {
+      currentId = `conv-${Date.now()}`;
+      const newConv: Conversation = {
+        id: currentId,
+        title: textToSend.slice(0, 36) + (textToSend.length > 36 ? '...' : ''),
+        dateGroup: 'Today',
+        messages: newMessages,
+        updatedAt: 'Just now'
+      };
+      setActiveId(currentId);
+      setConversations(prev => [newConv, ...prev]);
+    } else {
+      setConversations(prev =>
+        prev.map(c =>
+          c.id === currentId
+            ? { ...c, messages: newMessages, updatedAt: 'Just now' }
+            : c
+        )
+      );
+    }
+
+    // Mock UI Assistant Response (Focus only on UI; no AI integration yet)
+    setTimeout(() => {
+      const assistantMessage: Message = {
+        id: `asst-${Date.now()}`,
+        role: 'assistant',
+        content: `**Preview Response**:\n\nYou asked: "${textToSend}"\n\nThis is a clean, minimal UI placeholder. The conversational frontend layout, collapsible sidebar, and message styling are fully configured and ready for live AI streaming integration.`,
+        timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+      };
+
+      setMessages(prev => {
+        const updated = [...prev, assistantMessage];
+        // update conversation record
+        setConversations(cList =>
+          cList.map(c =>
+            c.id === currentId ? { ...c, messages: updated } : c
+          )
+        );
+        return updated;
+      });
+    }, 450);
+  };
+
+  const activeTitle = activeId
+    ? conversations.find(c => c.id === activeId)?.title || 'ChatGPT'
+    : 'ChatGPT';
 
   return (
-    <AppShell appName="ChatGPT Core Platform" version="1.0.0">
-      <div className="space-y-6">
-        {/* Architecture Status Banner */}
-        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-lg font-bold text-gray-900">System Architecture Scaffold</h2>
-                {isLoading ? (
-                  <Badge variant="warning">Checking API...</Badge>
-                ) : health ? (
-                  <Badge variant="success">Backend Connected</Badge>
-                ) : (
-                  <Badge variant="error">API Offline</Badge>
-                )}
-              </div>
-              <p className="text-sm text-gray-500">
-                Foundational architecture setup with React, TypeScript, Tailwind, and FastAPI backend.
-              </p>
-            </div>
-            <Button
-              variant="outline"
-              onClick={() => refetch()}
-              isLoading={isLoading}
-            >
-              Test Backend Connection
-            </Button>
-          </div>
+    <div className="flex h-screen w-screen overflow-hidden bg-white text-black font-sans antialiased">
+      {/* Collapsible Left Sidebar */}
+      <Sidebar
+        isOpen={isSidebarOpen}
+        onToggle={() => setIsSidebarOpen(!isSidebarOpen)}
+        conversations={conversations}
+        activeId={activeId}
+        onSelectConversation={handleSelectConversation}
+        onNewChat={handleNewChat}
+        onDeleteConversation={handleDeleteConversation}
+      />
 
-          {error && (
-            <div className="mt-4 p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-700">
-              <strong>Connection Notice:</strong> {error}. Start the backend server on port 8000 to connect.
-            </div>
+      {/* Main Chat Canvas Area */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden relative bg-white">
+        {/* Top Header Bar */}
+        <ChatHeader
+          isSidebarOpen={isSidebarOpen}
+          onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+          onNewChat={handleNewChat}
+          title={activeTitle}
+        />
+
+        {/* Dynamic Center Area: Welcome Screen or Message List */}
+        <div className="flex-1 overflow-y-auto flex flex-col justify-between">
+          {messages.length === 0 ? (
+            <WelcomeScreen onSelectPrompt={(prompt) => handleSendMessage(prompt)} />
+          ) : (
+            <MessageList messages={messages} />
           )}
 
-          {health && (
-            <div className="mt-4 p-4 bg-gray-50 border border-gray-200/80 rounded-xl grid grid-cols-2 md:grid-cols-4 gap-4 text-xs font-mono">
-              <div>
-                <span className="text-gray-400 block">Status:</span>
-                <span className="text-emerald-600 font-semibold uppercase">{health.status}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block">Project:</span>
-                <span className="text-gray-800 font-semibold">{health.project}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block">Version:</span>
-                <span className="text-gray-800 font-semibold">{health.version}</span>
-              </div>
-              <div>
-                <span className="text-gray-400 block">Server Timestamp:</span>
-                <span className="text-gray-800">{new Date(health.timestamp).toLocaleTimeString()}</span>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Modules & Structure Overview */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-lg mb-3">
-              TS
-            </div>
-            <h3 className="font-semibold text-gray-900 text-sm mb-1">Frontend Scaffold</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-3">
-              React 18, TypeScript, Tailwind CSS, modular component layout, custom hooks, and typed API clients.
-            </p>
-            <div className="text-[11px] font-mono text-gray-400 bg-gray-50 p-2 rounded-lg border border-gray-100">
-              chatgpt-core/frontend/src/
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-lg mb-3">
-              API
-            </div>
-            <h3 className="font-semibold text-gray-900 text-sm mb-1">FastAPI Backend</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-3">
-              FastAPI, Pydantic schemas, CORS middleware, centralized configuration, and health endpoints.
-            </p>
-            <div className="text-[11px] font-mono text-gray-400 bg-gray-50 p-2 rounded-lg border border-gray-100">
-              chatgpt-core/backend/app/
-            </div>
-          </div>
-
-          <div className="bg-white p-5 rounded-2xl border border-gray-200 shadow-sm">
-            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center font-bold text-lg mb-3">
-              AI
-            </div>
-            <h3 className="font-semibold text-gray-900 text-sm mb-1">AI Pipeline Ready</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-3">
-              Pre-configured slots for LLM streaming (SSE), vector database (pgvector), and Google OAuth authentication.
-            </p>
-            <div className="text-[11px] font-mono text-gray-400 bg-gray-50 p-2 rounded-lg border border-gray-100">
-              chatgpt-core/backend/app/services/
-            </div>
-          </div>
+          {/* Rounded Message Input Box */}
+          <ChatInput
+            value={inputPrompt}
+            onChange={setInputPrompt}
+            onSubmit={() => handleSendMessage()}
+          />
         </div>
       </div>
-    </AppShell>
+    </div>
   );
 }
 
