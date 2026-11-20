@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
+import Link from 'next/link';
+import { AuthModal } from '../components/AuthModal';
 
 // --- TYPES ---
 interface Message {
@@ -126,8 +128,32 @@ export default function ChatGPTPage() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputVal, setInputVal] = useState('');
   const [searchFilter, setSearchFilter] = useState('');
+  const [isAuthOpen, setIsAuthOpen] = useState(false);
+  const [token, setToken] = useState<string | null>(null);
+  const [user, setUser] = useState<any>(null);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Initialize auth state from localStorage
+  useEffect(() => {
+    try {
+      const storedToken = localStorage.getItem('chatgpt_token');
+      const storedUser = localStorage.getItem('chatgpt_user');
+      if (storedToken) setToken(storedToken);
+      if (storedUser) setUser(JSON.parse(storedUser));
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('chatgpt_token');
+    localStorage.removeItem('chatgpt_user');
+    setToken(null);
+    setUser(null);
+    setUserMenuOpen(false);
+  };
 
   // Auto-collapse sidebar on narrow mobile viewports on initial load
   useEffect(() => {
@@ -377,22 +403,61 @@ export default function ChatGPTPage() {
         </div>
 
         {/* Sidebar Footer: User Account */}
-        <div className={`p-3 border-t ${
+        <div className={`p-3 border-t relative ${
           theme === 'dark' ? 'border-[#2f2f2f] bg-[#171717]' : 'border-gray-200 bg-[#f9f9f9]'
         }`}>
-          <div className={`flex items-center gap-2.5 p-2 rounded-xl transition-colors cursor-pointer ${
-            theme === 'dark' ? 'hover:bg-[#212121]' : 'hover:bg-gray-200/60'
-          }`}>
-            <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
-              theme === 'dark' ? 'bg-white text-black' : 'bg-black text-white'
-            }`}>
-              U
+          {user ? (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className={`w-full flex items-center gap-2.5 p-2 rounded-xl transition-colors cursor-pointer text-left ${
+                  theme === 'dark' ? 'hover:bg-[#212121]' : 'hover:bg-gray-200/60'
+                }`}
+              >
+                {user.photo_url ? (
+                  <img src={user.photo_url} alt={user.display_name || 'User'} className="w-7 h-7 rounded-full object-cover border border-[#444]" />
+                ) : (
+                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-bold text-xs ${
+                    theme === 'dark' ? 'bg-white text-black' : 'bg-black text-white'
+                  }`}>
+                    {(user.display_name || user.email || 'U')[0].toUpperCase()}
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-semibold truncate">{user.display_name || user.email?.split('@')[0] || 'Logged In'}</div>
+                  <div className="text-[10px] text-gray-400 truncate">{user.email || 'Active Account'}</div>
+                </div>
+              </button>
+
+              {userMenuOpen && (
+                <div className={`absolute bottom-full left-0 mb-2 w-full rounded-xl border shadow-xl p-1.5 z-30 ${
+                  theme === 'dark' ? 'bg-[#212121] border-[#333] text-white' : 'bg-white border-gray-200 text-black'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={handleLogout}
+                    className="w-full text-left px-3 py-2 text-xs rounded-lg hover:bg-red-500/10 text-red-500 font-medium transition-colors flex items-center gap-2 cursor-pointer"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <polyline points="16 17 21 12 16 7" />
+                      <line x1="21" y1="12" x2="9" y2="12" />
+                    </svg>
+                    <span>Log out</span>
+                  </button>
+                </div>
+              )}
             </div>
-            <div className="flex-1 min-w-0">
-              <div className="text-xs font-semibold truncate">Pro User</div>
-              <div className="text-[10px] text-gray-400 truncate">Free Plan &bull; Minimal UI</div>
-            </div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsAuthOpen(true)}
+              className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-black dark:bg-white text-white dark:text-black font-semibold text-xs hover:opacity-90 transition-opacity cursor-pointer shadow-sm"
+            >
+              <span>Log in / Sign up</span>
+            </button>
+          )}
         </div>
       </aside>
 
@@ -473,6 +538,26 @@ export default function ChatGPTPage() {
                 <line x1="13.5" y1="6.5" x2="17.5" y2="10.5" />
               </svg>
             </button>
+
+            {/* Header Login / Profile Button */}
+            {!user ? (
+              <button
+                type="button"
+                onClick={() => setIsAuthOpen(true)}
+                className="px-3 py-1.5 rounded-full text-xs font-semibold bg-black text-white dark:bg-white dark:text-black hover:opacity-90 transition-opacity cursor-pointer shadow-xs ml-1"
+              >
+                Log in
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setUserMenuOpen(!userMenuOpen)}
+                className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs bg-black text-white dark:bg-white dark:text-black cursor-pointer border border-[#333] ml-1"
+                title={user.display_name || user.email}
+              >
+                {(user.display_name || user.email || 'U')[0].toUpperCase()}
+              </button>
+            )}
           </div>
         </header>
 
@@ -673,6 +758,16 @@ export default function ChatGPTPage() {
           </div>
         </div>
       </main>
+
+      {/* Authentication Modal */}
+      <AuthModal
+        isOpen={isAuthOpen}
+        onClose={() => setIsAuthOpen(false)}
+        onLoginSuccess={(tok, u) => {
+          setToken(tok);
+          setUser(u);
+        }}
+      />
     </div>
   );
 }
